@@ -1,0 +1,23 @@
+{
+  "name": "hexagonal-dice-learning",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.eslint.json",
+    "lint:verify": "node --test tooling/tests/*.test.mjs",
+    "check": "npm run lint:verify && npm run lint && npm run typecheck"
+  },
+  "devDependencies": {
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^22.20.5",
+    "@typescript-eslint/utils": "^8.71.1",
+    "eslint": "^9.0.0",
+    "eslint-config-codely": "^4.5.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "typescript": "^5.9.2"
+  }
+}

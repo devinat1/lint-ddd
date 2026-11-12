@@ -224,19 +224,36 @@ export const parseSelection = (value: unknown): Selection => {
   });
 };
 
-export const choicesFromAnswer = ({ answer, choices }: { answer: string; choices: readonly string[] }): string[] => {
-  const tokens = answer
-    .split(",")
-    .map((token) => token.trim())
-    .filter((token) => token !== "");
-  if (tokens.length === 0) {
-    return [];
+type ChecklistState = { cursor: number; selected: readonly number[] };
+
+export const checklistStep = ({
+  name,
+  state,
+  count,
+}: {
+  name: string;
+  state: ChecklistState;
+  count: number;
+}): { state: ChecklistState; isDone: boolean; shouldDraw: boolean } => {
+  if (name === "return") {
+    return { state, isDone: true, shouldDraw: false };
   }
-  const indexes = tokens.map((token) => Number(token));
-  const hasInvalidIndex = indexes.some((index) => !Number.isInteger(index) || index < 1 || index > choices.length);
-  if (hasInvalidIndex) {
-    throw new Error("Choose numbers from the list.");
+  if (name === "space") {
+    const selected = state.selected.includes(state.cursor)
+      ? state.selected.filter((index) => index !== state.cursor)
+      : [...state.selected, state.cursor];
+
+    return { state: { cursor: state.cursor, selected }, isDone: false, shouldDraw: true };
+  }
+  if ((name === "up" || name === "down") && count > 0) {
+    const delta = name === "up" ? count - 1 : 1;
+
+    return {
+      state: { cursor: (state.cursor + delta) % count, selected: state.selected },
+      isDone: false,
+      shouldDraw: true,
+    };
   }
 
-  return indexes.map((index) => choices[index - 1]);
+  return { state, isDone: false, shouldDraw: false };
 };

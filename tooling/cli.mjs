@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stdin, stdout } from "node:process";
-import { createInterface } from "node:readline/promises";
+import { emitKeypressEvents } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { changeNames, choicesFromAnswer, groupNames, ruleIds, selectionFromFlags } from "./catalog.ts";
+import { changeNames, checklistStep, groupNames, ruleIds, selectionFromFlags } from "./catalog.ts";
 import { eslintConfigSource, isOurEslintConfig, readSelection, writeSelection } from "./manifest.mjs";
 
 const dependencyNames = [
@@ -82,27 +82,98 @@ const parseArgv = (argv) => {
 	return { command, ...parsed };
 };
 
-const ask = async ({ prompt, choices, rl }) => {
-	stdout.write(`${prompt}\n`);
-	choices.forEach((choice, index) => {
-		stdout.write(`${index + 1}. ${choice}\n`);
-	});
-	stdout.write("Comma-separated numbers, or empty for none:\n");
+const keyName = (key) => {
+	if (key === undefined) {
+		return "";
+	}
+	if (key.ctrl === true && key.name === "c") {
+		return "cancel";
+	}
+	if (key.name === "space" || key.sequence === " ") {
+		return "space";
+	}
+	if (key.name === "return" || key.name === "enter") {
+		return "return";
+	}
+	if (key.name === "up" || key.name === "down") {
+		return key.name;
+	}
 
-	return choicesFromAnswer({ answer: await rl.question(""), choices });
+	return "";
 };
 
-const promptSelection = async () => {
-	const rl = createInterface({ input: stdin, output: stdout });
-	try {
-		const only = await ask({ prompt: "Groups.", choices: groupNames, rl });
-		const on = await ask({ prompt: "Rules to force on.", choices: ruleIds, rl });
-		const off = await ask({ prompt: "Rules to force off.", choices: ruleIds, rl });
+const checklistLines = ({ prompt, choices, state }) => {
+	const screenRows = stdout.rows > 0 ? stdout.rows : 24;
+	const screenColumns = stdout.columns > 0 ? stdout.columns : 80;
+	const room = Math.max(1, screenRows - 3);
+	const size = Math.min(choices.length, room);
+	const start = Math.min(Math.max(0, state.cursor - Math.floor((size - 1) / 2)), Math.max(0, choices.length - size));
+	const width = Math.max(20, screenColumns - 1);
+	const fit = (line) => (line.length > width ? line.slice(0, width) : line);
+	const rows = choices.slice(start, start + size).map((choice, offset) => {
+		const index = start + offset;
+		const pointer = index === state.cursor ? ">" : " ";
+		const mark = state.selected.includes(index) ? "x" : " ";
 
-		return selectionFromFlags({ isFull: false, only, on, off });
-	} finally {
-		rl.close();
-	}
+		return fit(`${pointer} [${mark}] ${choice}`);
+	});
+
+	return [fit(prompt), ...rows, "arrows move, space select, enter confirm"];
+};
+
+const ask = ({ prompt, choices }) =>
+	new Promise((resolve) => {
+		const session = { state: { cursor: 0, selected: [] }, onKeypress: undefined };
+		const stop = () => {
+			if (session.onKeypress !== undefined) {
+				stdin.off("keypress", session.onKeypress);
+			}
+			stdin.setRawMode(false);
+			stdin.pause();
+		};
+		const paint = () => {
+			stdout.write(`\x1b[H\x1b[J${checklistLines({ prompt, choices, state: session.state }).join("\n")}`);
+		};
+		const finish = (line) => {
+			stop();
+			stdout.write(line === undefined ? "\x1b[?25h\x1b[?1049l" : `\x1b[?25h\x1b[?1049l${line}\n`);
+		};
+		session.onKeypress = (_char, key) => {
+			const name = keyName(key);
+			if (name === "cancel") {
+				finish();
+				process.exitCode = 130;
+
+				return;
+			}
+			const next = checklistStep({ name, state: session.state, count: choices.length });
+			session.state = next.state;
+			if (!next.isDone) {
+				if (next.shouldDraw) {
+					paint();
+				}
+
+				return;
+			}
+			const picked = choices.filter((_choice, index) => session.state.selected.includes(index));
+			const summary = picked.join(", ");
+			finish(`${prompt} ${summary === "" ? "(none)" : summary}`);
+			resolve(picked);
+		};
+		emitKeypressEvents(stdin);
+		stdin.setRawMode(true);
+		stdin.resume();
+		stdout.write("\x1b[?1049h\x1b[?25l");
+		paint();
+		stdin.on("keypress", session.onKeypress);
+	});
+
+const promptSelection = async () => {
+	const only = await ask({ prompt: "Groups.", choices: groupNames });
+	const on = await ask({ prompt: "Rules to force on.", choices: ruleIds });
+	const off = await ask({ prompt: "Rules to force off.", choices: ruleIds });
+
+	return selectionFromFlags({ isFull: false, only, on, off });
 };
 
 const chooseSelection = async (parsed) => {

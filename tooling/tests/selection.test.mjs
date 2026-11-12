@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-	choicesFromAnswer,
+	checklistStep,
 	disableName,
 	enableName,
 	fullSelection,
@@ -108,13 +108,23 @@ test("enable and disable keep unrelated exceptions", () => {
 	assert.deepEqual(enabled.off, []);
 });
 
-test("checklist answers use one-based numbers", () => {
-	assert.deepEqual(choicesFromAnswer({ answer: "  ", choices: ["codely", "boundaries"] }), []);
-	assert.deepEqual(choicesFromAnswer({ answer: "2, 1", choices: ["codely", "boundaries"] }), [
-		"boundaries",
-		"codely",
-	]);
-	assert.throws(() => choicesFromAnswer({ answer: "0", choices: ["codely"] }), /Choose numbers/);
+test("checklist cursor toggles with space and confirms with enter", () => {
+	const count = 3;
+	const down = checklistStep({ name: "down", count, state: { cursor: 0, selected: [] } });
+	assert.equal(down.state.cursor, 1);
+	assert.equal(down.shouldDraw, true);
+	const selected = checklistStep({ name: "space", count, state: down.state });
+	assert.deepEqual(selected.state.selected, [1]);
+	const cleared = checklistStep({ name: "space", count, state: selected.state });
+	assert.deepEqual(cleared.state.selected, []);
+	const wrapped = checklistStep({ name: "up", count, state: { cursor: 0, selected: [] } });
+	assert.equal(wrapped.state.cursor, 2);
+	const confirmed = checklistStep({ name: "return", count, state: selected.state });
+	assert.equal(confirmed.isDone, true);
+	assert.deepEqual(confirmed.state.selected, [1]);
+	const ignored = checklistStep({ name: "left", count, state: down.state });
+	assert.equal(ignored.shouldDraw, false);
+	assert.equal(ignored.state, down.state);
 });
 
 test("defineConfig enables a lone rule, a group rule, and turns an exception off", () => {

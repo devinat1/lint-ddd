@@ -16,10 +16,10 @@ npm run check
 
 ## Install in another repo
 
-Install this package, then choose rules. Until you publish, install it with a local path:
+Install this package, then choose rules:
 
 ```sh
-npm install --save-dev file:../lint-ddd
+npm install --save-dev lint-ddd
 npx lint-ddd init --full
 ```
 

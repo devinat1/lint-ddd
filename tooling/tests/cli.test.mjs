@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import { eslintConfigSource } from "../manifest.mjs";
@@ -130,6 +130,32 @@ test("init refuses a second run, a foreign config, missing flags, and a missing 
 	const combined = await run({ cwd: conflict, args: ["init", "--full", "--only", "codely"] });
 	assert.equal(combined.code, 1);
 	await assert.rejects(access(join(conflict, "lint-ddd.config.json")));
+});
+
+test("published files run inside node_modules", async () => {
+	const build = fileURLToPath(new URL("../build.mjs", import.meta.url));
+	await execFileAsync(process.execPath, [build]);
+	const packageRoot = fileURLToPath(new URL("../../node_modules/.lint-ddd-publish/", import.meta.url));
+	roots.push(packageRoot);
+	await rm(packageRoot, { recursive: true, force: true });
+	await mkdir(packageRoot, { recursive: true });
+	await cp(fileURLToPath(new URL("../../dist", import.meta.url)), join(packageRoot, "dist"), { recursive: true });
+	await cp(fileURLToPath(new URL("../../package.json", import.meta.url)), join(packageRoot, "package.json"));
+	const project = await createRoot();
+	const result = await execFileAsync(
+		process.execPath,
+		[join(packageRoot, "dist", "bin", "lint-ddd.mjs"), "init", "--only", "boundaries"],
+		{ cwd: project, encoding: "utf8" },
+	);
+	assert.match(result.stderr, /tsconfig\.eslint\.json is missing/);
+	assert.deepEqual(JSON.parse(await readFile(join(project, "lint-ddd.config.json"), "utf8")).groups, ["boundaries"]);
+
+	const configUrl = pathToFileURL(join(packageRoot, "dist", "tooling", "eslint.config.mjs")).href;
+	await execFileAsync(process.execPath, [
+		"--input-type=module",
+		"--eval",
+		`const loaded = await import(${JSON.stringify(configUrl)}); if (typeof loaded.defineConfig !== "function") process.exit(1);`,
+	]);
 });
 
 test("enable requires an existing manifest", async () => {

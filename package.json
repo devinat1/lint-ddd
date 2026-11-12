@@ -1,20 +1,22 @@
 {
   "name": "lint-ddd",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "description": "Lint rules for a TypeScript ports-and-adapters codebase.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devinat1/lint-ddd.git"
+  },
   "type": "module",
   "bin": {
-    "lint-ddd": "./bin/lint-ddd.mjs"
+    "lint-ddd": "dist/bin/lint-ddd.mjs"
   },
   "exports": {
-    ".": "./tooling/eslint.config.mjs"
+    ".": "./dist/tooling/eslint.config.mjs"
   },
   "files": [
-    "bin",
-    "tooling",
+    "dist",
     "docs",
-    "README.md",
-    "eslint.config.mjs",
-    "lint-ddd.config.json"
+    "README.md"
   ],
   "engines": {
     "node": ">=22.18"
@@ -23,6 +25,8 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "typecheck": "tsc -p tsconfig.eslint.json",
+    "build": "node tooling/build.mjs",
+    "prepare": "node tooling/build.mjs",
     "lint:verify": "node --test tooling/tests/*.test.mjs",
     "check": "npm run lint:verify && npm run lint && npm run typecheck"
   },

@@ -1,0 +1,13 @@
+{
+  "groups": [
+    "codely",
+    "boundaries",
+    "strict-types",
+    "code-style",
+    "policy-conventions",
+    "validation",
+    "presentation"
+  ],
+  "on": [],
+  "off": []
+}

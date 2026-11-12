@@ -1,1 +1,3 @@
-export { default } from "./tooling/eslint.config.mjs";
+import { defineConfig } from "./tooling/eslint.config.mjs";
+
+export default defineConfig();

@@ -14,6 +14,34 @@ npm run check
 - `npm run typecheck` checks TypeScript, including the custom lint rules.
 - `npm run lint:fix` applies formatting and other safe ESLint fixes.
 
+## Install in another repo
+
+Install this package, then choose rules. Until you publish, install it with a local path:
+
+```sh
+npm install --save-dev file:../lint-ddd
+npx lint-ddd init --full
+```
+
+`--full` enables every group. A partial install names groups, plus rules to force on or off:
+
+```sh
+npx lint-ddd init --only boundaries,policy-conventions --on policy/validated-input --off policy/boolean-prefix
+```
+
+With a terminal and no selection flags, `init` shows three checklists: groups, rules to force on, and rules to force off. Without a terminal, pass `--full` or `--only`. `off` wins when a rule is also enabled by its group.
+
+`init` writes `lint-ddd.config.json`, an `eslint.config.mjs` that calls `defineConfig()`, and the lint devDependencies in `package.json`. It does not run `npm install`. It stops if `package.json` is missing, if `lint-ddd.config.json` already exists, or if `eslint.config.mjs` is not already the generated file. An existing `file:` or `link:` version of `lint-ddd` is left in place. Strict type rules read `tsconfig.eslint.json`.
+
+Add or remove a group or rule later. Group changes keep rule exceptions:
+
+```sh
+npx lint-ddd enable presentation
+npx lint-ddd disable policy/static-tailwind
+```
+
+The groups are `codely`, `boundaries`, `strict-types`, `code-style`, `policy-conventions`, `validation`, and `presentation`. Layer folders stay `src/domain`, `src/ports`, `src/application`, `src/adapters/primary/*`, `src/adapters/secondary/*`, `src/composition`, `src/presentation`, `tests`, and `tooling`.
+
 ## Walkthrough
 
 1. `eslint.config.mjs` loads `tooling/eslint.config.mjs`.

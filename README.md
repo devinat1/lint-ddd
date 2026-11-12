@@ -1,6 +1,6 @@
-# Dice game: ports and adapters
+# lint-ddd
 
-Step 1 installs and verifies lint rules. No game logic or webpage exists yet.
+Lint rules for a TypeScript ports-and-adapters codebase.
 
 Use Node 22.18 or newer:
 
@@ -19,6 +19,6 @@ npm run check
 1. `eslint.config.mjs` loads `tooling/eslint.config.mjs`.
 2. Its `elements` list gives each source folder a role. Its `dependencies` table specifies which roles that folder can import.
 3. `eslint-plugin-boundaries` reports forbidden imports. For example, application can import a port but not a concrete secondary adapter; composition can import both.
-4. `tooling/tests/architecture.test.mjs` creates temporary, empty typed fixtures, lints snippets against the real configuration, checks the exact rule responsible, and removes the fixture files. These are policy tests, not game code.
+4. `tooling/tests/architecture.test.mjs` creates temporary, empty typed fixtures, lints snippets against the real configuration, checks the exact rule responsible, and removes the fixture files.
 
-See [the lint policy](docs/lint-policy.md) for scope and limits. After this walkthrough, the next piece is the domain rule: a six wins.
+See [the lint policy](docs/lint-policy.md) for scope and limits.

@@ -2,9 +2,7 @@
 
 ## Source and scope
 
-This exercise reuses Codely's 4.5 baseline and the general, strict TypeScript, convention, validation and presentation rules from `api-webagent-extraction/tooling/`. Those rules are also used in the accountability project. The copied rule implementations live locally: running lint does not depend on either reference repository.
-
-Architecture uses `eslint-plugin-boundaries` 7, as accountability does, with a dependency table adapted to this smaller project. It is not a byte-for-byte copy of either entire repository policy.
+These rules check a TypeScript codebase laid out as ports and adapters. Codely 4.5 is the baseline. Architecture uses `eslint-plugin-boundaries` 7. The dependency table below is the policy an adopting codebase is checked against.
 
 The checked layers are:
 
@@ -50,11 +48,11 @@ The policy tests create temporary typed fixtures in the real layer paths, invoke
 
 - Dependency checks are not a runtime sandbox. They do not prove that a function implements its port (TypeScript checks assignments) or that a module contains the right business logic.
 - Import checks alone do not forbid ambient globals such as `Math.random`, `Date`, `document` or `fetch` in the core; keeping those behind ports also requires review.
-- We have not selected or installed the webpage framework. Next-specific lint rules and browser/server boundaries must be added with that piece if Next is selected; a browser-only game has a different runtime boundary.
+- A webpage framework is not part of this policy. Next-specific lint rules and browser/server boundaries are omitted.
 - No Prisma, deployment, shared-contract package, blog/wiki ownership or repository-specific filesystem allowlist is copied. The ReadyMeet `insufficient_credits` selector is one of those shared-contract rules and is not copied. Unknown source files are checked by ESLint, but empty directories and symlinks are not policed by a separate folder checker.
 - Next route-signature exceptions and `Response.json` / `NextResponse.json` carve-outs are not copied. Proxy Node built-in allowlists and package-captured element patterns are not copied. Tailwind checks stay enabled.
 - Static Tailwind and JSON validation analysis retains the conservative proof limits of the reference implementations.
 
 ## Dependency security
 
-At setup, `npm audit` reports six high-severity development dependency findings propagated from the braces/micromatch chain through Codely/check-file and boundaries. The braces advisory includes the currently installed latest 3.0.3. Suggested automated fixes downgrade the shared presets/plugins to incompatible older major versions; no force downgrade was applied. These are lint-tool dependencies, not deployed game dependencies. Passing lint does not mean the dependency graph is audit-clean.
+At setup, `npm audit` reports six high-severity development dependency findings propagated from the braces/micromatch chain through Codely/check-file and boundaries. The braces advisory includes the currently installed latest 3.0.3. Suggested automated fixes downgrade the shared presets/plugins to incompatible older major versions; no force downgrade was applied. These are lint-tool dependencies. Passing lint does not mean the dependency graph is audit-clean.

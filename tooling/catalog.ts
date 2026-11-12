@@ -1,5 +1,5 @@
 export const groups: readonly { name: string; detail: string; rules: readonly string[] }[] = [
-  { name: "codely", detail: "CodelyTV's ESLint and Prettier style baseline.", rules: [] },
+  { name: "codely", detail: "Prettier, sorted imports, unused imports, and baseline TypeScript checks.", rules: [] },
   {
     name: "boundaries",
     detail: "Which layers may import which other layers.",

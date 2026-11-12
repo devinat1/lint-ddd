@@ -4,7 +4,7 @@ import { stdin, stdout } from "node:process";
 import { emitKeypressEvents } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { changeNames, checklistStep, groupNames, ruleIds, selectionFromFlags } from "./catalog.ts";
+import { changeNames, checklistStep, groupNames, groups, ruleIds, selectionFromFlags } from "./catalog.ts";
 import { eslintConfigSource, isOurEslintConfig, readSelection, writeSelection } from "./manifest.mjs";
 
 const dependencyNames = [
@@ -102,26 +102,32 @@ const keyName = (key) => {
 	return "";
 };
 
-const checklistLines = ({ prompt, choices, state }) => {
+const groupDetails = Object.fromEntries(groups.map((group) => [group.name, group.detail]));
+
+const checklistLines = ({ prompt, choices, details, state }) => {
 	const screenRows = stdout.rows > 0 ? stdout.rows : 24;
 	const screenColumns = stdout.columns > 0 ? stdout.columns : 80;
 	const room = Math.max(1, screenRows - 3);
 	const size = Math.min(choices.length, room);
 	const start = Math.min(Math.max(0, state.cursor - Math.floor((size - 1) / 2)), Math.max(0, choices.length - size));
 	const width = Math.max(20, screenColumns - 1);
+	const nameWidth =
+		details === undefined || choices.length === 0 ? 0 : Math.max(...choices.map((choice) => choice.length));
 	const fit = (line) => (line.length > width ? line.slice(0, width) : line);
 	const rows = choices.slice(start, start + size).map((choice, offset) => {
 		const index = start + offset;
 		const pointer = index === state.cursor ? ">" : " ";
 		const mark = state.selected.includes(index) ? "x" : " ";
+		const detail = details?.[choice];
+		const label = detail === undefined ? choice : `${choice.padEnd(nameWidth)}  ${detail}`;
 
-		return fit(`${pointer} [${mark}] ${choice}`);
+		return fit(`${pointer} [${mark}] ${label}`);
 	});
 
 	return [fit(prompt), ...rows, "arrows move, space select, enter confirm"];
 };
 
-const ask = ({ prompt, choices }) =>
+const ask = ({ prompt, choices, details }) =>
 	new Promise((resolve) => {
 		const session = { state: { cursor: 0, selected: [] }, onKeypress: undefined };
 		const stop = () => {
@@ -132,7 +138,9 @@ const ask = ({ prompt, choices }) =>
 			stdin.pause();
 		};
 		const paint = () => {
-			stdout.write(`\x1b[H\x1b[J${checklistLines({ prompt, choices, state: session.state }).join("\n")}`);
+			stdout.write(
+				`\x1b[H\x1b[J${checklistLines({ prompt, choices, details, state: session.state }).join("\n")}`,
+			);
 		};
 		const finish = (line) => {
 			stop();
@@ -169,7 +177,7 @@ const ask = ({ prompt, choices }) =>
 	});
 
 const promptSelection = async () => {
-	const only = await ask({ prompt: "Groups.", choices: groupNames });
+	const only = await ask({ prompt: "Groups.", choices: groupNames, details: groupDetails });
 	const on = await ask({ prompt: "Rules to force on.", choices: ruleIds });
 	const off = await ask({ prompt: "Rules to force off.", choices: ruleIds });
 

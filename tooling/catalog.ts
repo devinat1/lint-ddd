@@ -1,7 +1,8 @@
-export const groups: readonly { name: string; rules: readonly string[] }[] = [
-  { name: "codely", rules: [] },
+export const groups: readonly { name: string; detail: string; rules: readonly string[] }[] = [
+  { name: "codely", detail: "CodelyTV's ESLint and Prettier style baseline.", rules: [] },
   {
     name: "boundaries",
+    detail: "Which layers may import which other layers.",
     rules: [
       "boundaries/dependencies",
       "boundaries/no-unknown-files",
@@ -11,6 +12,7 @@ export const groups: readonly { name: string; rules: readonly string[] }[] = [
   },
   {
     name: "strict-types",
+    detail: "Strict TypeScript checks and Prettier formatting.",
     rules: [
       "@typescript-eslint/no-explicit-any",
       "@typescript-eslint/array-type",
@@ -43,10 +45,12 @@ export const groups: readonly { name: string; rules: readonly string[] }[] = [
   },
   {
     name: "code-style",
+    detail: "Complexity, nesting, function length, and cycles.",
     rules: ["complexity", "max-depth", "max-lines-per-function", "import/no-cycle", "no-restricted-syntax"],
   },
   {
     name: "policy-conventions",
+    detail: "Names, parameters, immutability, and test files.",
     rules: [
       "policy/boolean-prefix",
       "policy/named-parameters",
@@ -61,9 +65,14 @@ export const groups: readonly { name: string; rules: readonly string[] }[] = [
   },
   {
     name: "validation",
+    detail: "Zod for JSON input, named messages, and magic numbers.",
     rules: ["policy/named-messages", "policy/validated-input", "@typescript-eslint/no-magic-numbers"],
   },
-  { name: "presentation", rules: ["policy/static-tailwind", "policy/used-react-props"] },
+  {
+    name: "presentation",
+    detail: "JSX structure, Tailwind spacing, and React props.",
+    rules: ["policy/static-tailwind", "policy/used-react-props"],
+  },
 ];
 
 export type Selection = {

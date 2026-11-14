@@ -1,3 +1,3 @@
 import { defineConfig } from "./tooling/eslint.config.mjs";
 
-export default defineConfig();
+export default [{ ignores: ["examples/**"] }, ...defineConfig()];

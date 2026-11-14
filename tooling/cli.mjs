@@ -12,7 +12,14 @@ import {
 	selectionFromTree,
 	treeFromSelection,
 } from "./catalog.ts";
-import { eslintConfigSource, isOurEslintConfig, readSelection, usesOurConfig, writeSelection } from "./manifest.mjs";
+import {
+	eslintConfigSource,
+	installWorkflow,
+	isOurEslintConfig,
+	readSelection,
+	usesOurConfig,
+	writeSelection,
+} from "./manifest.mjs";
 
 const dependencyNames = [
 	"eslint",
@@ -58,7 +65,7 @@ const splitList = (value) =>
 const parseArgv = (argv) => {
 	const [command, ...tokens] = argv;
 	if (command === undefined) {
-		throw new Error("Usage: lint-ddd init, enable, or disable.");
+		throw new Error("Usage: lint-ddd init, enable, disable, ci, or dry-run.");
 	}
 	const parsed = tokens.reduce(
 		(state, token, index, all) => {
@@ -316,6 +323,52 @@ const init = async (parsed) => {
 	}
 };
 
+const hasSelectionFlags = (parsed) =>
+	parsed.isFull || parsed.only.length !== 0 || parsed.on.length !== 0 || parsed.off.length !== 0;
+
+const installCi = (parsed) => {
+	if (parsed.positionals.length !== 0 || hasSelectionFlags(parsed)) {
+		throw new Error("ci does not take arguments.");
+	}
+	installWorkflow(process.cwd());
+};
+
+const dryRun = async (parsed) => {
+	if (parsed.positionals.length !== 0) {
+		throw new Error("dry-run takes --full, --only, --on, or --off, not names.");
+	}
+	if (!hasSelectionFlags(parsed)) {
+		throw new Error("dry-run needs --full, --only, --on, or --off.");
+	}
+	const selection = selectionFromFlags({
+		isFull: parsed.isFull,
+		only: parsed.only,
+		on: parsed.on,
+		off: parsed.off,
+	});
+	const { ESLint } = await import("eslint");
+	const { defineConfig } = await import("./eslint.config.mjs");
+	const rootPath = process.cwd();
+	// ponytail: skips eslint.config.mjs. A hand-added ignore there is not part of this run.
+	const engine = new ESLint({
+		cwd: rootPath,
+		overrideConfigFile: true,
+		overrideConfig: defineConfig(rootPath, selection),
+	});
+	const results = await engine.lintFiles(["."]);
+	const formatter = await engine.loadFormatter("stylish");
+	const text = await formatter.format(results);
+	if (text !== "") {
+		process.stdout.write(text);
+	}
+
+	return results.some((result) => result.errorCount > 0);
+};
+
+const setExitCode = (code) => {
+	process.exitCode = code;
+};
+
 const updateSelection = ({ names, isEnable }) => {
 	if (names.length === 0) {
 		throw new Error("Name at least one group or rule.");
@@ -331,6 +384,18 @@ const main = async () => {
 			throw new Error("init does not take positional arguments.");
 		}
 		await init(parsed);
+
+		return;
+	}
+	if (parsed.command === "ci") {
+		installCi(parsed);
+
+		return;
+	}
+	if (parsed.command === "dry-run") {
+		if (await dryRun(parsed)) {
+			setExitCode(1);
+		}
 
 		return;
 	}

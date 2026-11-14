@@ -7,7 +7,7 @@ import { after, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-import { eslintConfigSource } from "../manifest.mjs";
+import { eslintConfigSource, workflowSource } from "../manifest.mjs";
 
 const execFileAsync = promisify(execFile);
 const bin = fileURLToPath(new URL("../../bin/lint-ddd.mjs", import.meta.url));
@@ -250,6 +250,51 @@ test("published files run inside node_modules", async () => {
 		"--eval",
 		`const loaded = await import(${JSON.stringify(configUrl)}); if (typeof loaded.defineConfig !== "function") process.exit(1);`,
 	]);
+});
+
+test("ci writes the workflow and refuses a foreign one", async () => {
+	const root = await createRoot();
+	const packageBefore = await readFile(join(root, "package.json"), "utf8");
+	assert.equal((await run({ cwd: root, args: ["ci"] })).code, 0);
+	assert.equal(await readFile(join(root, ".github", "workflows", "lint.yml"), "utf8"), workflowSource);
+	assert.equal((await run({ cwd: root, args: ["ci"] })).code, 0);
+	assert.equal(await readFile(join(root, ".github", "workflows", "lint.yml"), "utf8"), workflowSource);
+	assert.equal(await readFile(join(root, "package.json"), "utf8"), packageBefore);
+	await assert.rejects(access(join(root, "lint-ddd.config.json")));
+
+	const foreign = await createRoot();
+	const foreignWorkflow = "name: other\n";
+	await mkdir(join(foreign, ".github", "workflows"), { recursive: true });
+	await writeFile(join(foreign, ".github", "workflows", "lint.yml"), foreignWorkflow);
+	const refused = await run({ cwd: foreign, args: ["ci"] });
+	assert.equal(refused.code, 1);
+	assert.match(refused.stderr, /lint\.yml already exists/);
+	assert.equal(await readFile(join(foreign, ".github", "workflows", "lint.yml"), "utf8"), foreignWorkflow);
+
+	const flagged = await run({ cwd: root, args: ["ci", "--full"] });
+	assert.equal(flagged.code, 1);
+	assert.match(flagged.stderr, /does not take arguments/);
+});
+
+test("dry-run lints a trial selection without writing it", async () => {
+	const root = await createRoot();
+	const saved = '{"groups":["codely"],"on":[],"off":[]}\n';
+	await writeFile(join(root, "lint-ddd.config.json"), saved);
+	await writeFile(join(root, "sample.js"), "let value = 1;\n");
+	const failed = await run({ cwd: root, args: ["dry-run", "--on", "no-restricted-syntax"] });
+	assert.equal(failed.code, 1, failed.stderr);
+	assert.match(failed.stdout, /no-restricted-syntax/);
+	assert.equal(await readFile(join(root, "lint-ddd.config.json"), "utf8"), saved);
+	await assert.rejects(access(join(root, ".github", "workflows", "lint.yml")));
+	await assert.rejects(access(join(root, "eslint.config.mjs")));
+
+	const missing = await run({ cwd: root, args: ["dry-run"] });
+	assert.equal(missing.code, 1);
+	assert.match(missing.stderr, /needs --full, --only, --on, or --off/);
+	const named = await run({ cwd: root, args: ["dry-run", "boundaries"] });
+	assert.equal(named.code, 1);
+	assert.match(named.stderr, /not names/);
+	assert.equal(await readFile(join(root, "lint-ddd.config.json"), "utf8"), saved);
 });
 
 test("enable requires an existing manifest", async () => {

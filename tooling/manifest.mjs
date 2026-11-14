@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { orderSelection, parseSelection } from "./catalog.ts";
@@ -12,6 +12,36 @@ export default defineConfig();
 export const isOurEslintConfig = (source) => source.trim() === eslintConfigSource.trim();
 
 export const usesOurConfig = (source) => source.includes('from "lint-ddd"') && source.includes("defineConfig(");
+
+export const workflowSource = `name: lint
+on:
+  push:
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.18
+          cache: npm
+      - run: npm ci
+      - run: npx eslint .
+`;
+
+export const isOurWorkflow = (source) => source.trim() === workflowSource.trim();
+
+export const workflowPath = (rootPath) => join(rootPath, ".github", "workflows", "lint.yml");
+
+export const installWorkflow = (rootPath) => {
+	const filePath = workflowPath(rootPath);
+	if (existsSync(filePath) && !isOurWorkflow(readFileSync(filePath, "utf8"))) {
+		throw new Error(".github/workflows/lint.yml already exists.");
+	}
+	mkdirSync(join(rootPath, ".github", "workflows"), { recursive: true });
+	writeFileSync(filePath, workflowSource);
+};
 
 const readJson = (filePath) => {
 	try {

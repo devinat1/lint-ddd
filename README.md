@@ -40,6 +40,14 @@ npx lint-ddd enable presentation
 npx lint-ddd disable policy/static-tailwind
 ```
 
+`npx lint-ddd ci` writes `.github/workflows/lint.yml`. That workflow runs `npx eslint .`, so it checks the groups, `on` rules, and `off` rules saved in `lint-ddd.config.json`. Running it again rewrites the file when the contents are still the generated workflow, and stops if the file was edited. It does not run `npm install`.
+
+`npx lint-ddd dry-run` lints a trial selection and does not write it. Pass `--full`, `--only`, `--on`, or `--off`, the same way as `init`:
+
+```sh
+npx lint-ddd dry-run --only boundaries --off boundaries/no-unknown-files
+```
+
 The groups are `codely`, `boundaries`, `strict-types`, `code-style`, `policy-conventions`, `validation`, and `presentation`. Layer folders stay `src/domain`, `src/ports`, `src/application`, `src/adapters/primary/*`, `src/adapters/secondary/*`, `src/composition`, `src/presentation`, `tests`, and `tooling`.
 
 ## Walkthrough

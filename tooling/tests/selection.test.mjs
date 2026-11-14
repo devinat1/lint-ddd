@@ -286,6 +286,9 @@ test("defineConfig enables a lone rule, a group rule, and turns an exception off
 	assert.equal(ruleValue(partial, "policy/named-parameters"), undefined);
 	assert.equal(ruleValue(partial, "policy/static-tailwind"), "off");
 	assert.equal(ruleValue(partial, "policy/used-react-props"), "error");
+	const typed = partial.find((config) => config.languageOptions?.parserOptions?.project !== undefined);
+	assert.deepEqual(typed?.languageOptions.parserOptions.project, ["./tsconfig.eslint.json"]);
+	assert.notEqual(typed?.languageOptions.parser, undefined);
 	assert.equal(ruleValue(partial, "constructor-super"), undefined);
 	const jsxBlock = partial.find((config) => Array.isArray(config.files) && config.files.includes("**/*.{tsx,jsx}"));
 	assert.deepEqual(jsxBlock?.rules["no-restricted-syntax"], [

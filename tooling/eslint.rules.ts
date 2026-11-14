@@ -76,7 +76,16 @@ export const strictLintConfiguration = [
       "@typescript-eslint/no-unsafe-return": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
       "@typescript-eslint/only-throw-error": "error",
-      "@typescript-eslint/restrict-plus-operands": "error",
+      "@typescript-eslint/restrict-plus-operands": [
+        "error",
+        {
+          allowAny: false,
+          allowBoolean: false,
+          allowNullish: false,
+          allowNumberAndString: false,
+          allowRegExp: false,
+        },
+      ],
       "@typescript-eslint/restrict-template-expressions": ["error", { allowAny: false, allowNullish: false }],
       "prettier/prettier": ["error", { printWidth: 120, useTabs: false, tabWidth: 2 }],
     },

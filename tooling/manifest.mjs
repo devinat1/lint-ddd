@@ -11,6 +11,8 @@ export default defineConfig();
 
 export const isOurEslintConfig = (source) => source.trim() === eslintConfigSource.trim();
 
+export const usesOurConfig = (source) => source.includes('from "lint-ddd"') && source.includes("defineConfig(");
+
 const readJson = (filePath) => {
 	try {
 		return JSON.parse(readFileSync(filePath, "utf8"));

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -135,6 +135,22 @@ test("init replaces an existing selection and still refuses a foreign config", a
 	assert.equal(await readFile(join(owned, "lint-ddd.config.json"), "utf8"), ownedConfig);
 	assert.equal(await readFile(join(owned, "package.json"), "utf8"), ownedPackage);
 
+	const local = await createRoot();
+	assert.equal((await run({ cwd: local, args: ["init", "--only", "codely"] })).code, 0);
+	const localConfig = `import { defineConfig } from "lint-ddd";
+
+export default [{ ignores: ["lint-failures/**"] }, ...defineConfig()];
+`;
+	await writeFile(join(local, "eslint.config.mjs"), localConfig);
+	const kept = await run({ cwd: local, args: ["init", "--only", "boundaries"] });
+	assert.equal(kept.code, 0, kept.stderr);
+	assert.equal(await readFile(join(local, "eslint.config.mjs"), "utf8"), localConfig);
+	assert.deepEqual(await readJson(join(local, "lint-ddd.config.json")), {
+		groups: ["boundaries"],
+		on: [],
+		off: [],
+	});
+
 	const silent = await createRoot();
 	const noFlags = await run({ cwd: silent, args: ["init"] });
 	assert.equal(noFlags.code, 1);
@@ -151,6 +167,63 @@ test("init replaces an existing selection and still refuses a foreign config", a
 	const combined = await run({ cwd: conflict, args: ["init", "--full", "--only", "codely"] });
 	assert.equal(combined.code, 1);
 	await assert.rejects(access(join(conflict, "lint-ddd.config.json")));
+});
+
+test("init ignores the line feed left by a carriage-return submit", async () => {
+	const root = await createRoot();
+	await writeFile(join(root, "eslint.config.mjs"), eslintConfigSource);
+	await writeFile(join(root, "lint-ddd.config.json"), '{"groups":["codely"],"on":[],"off":[]}\n');
+	const probe = spawn(
+		"python3",
+		[
+			"-c",
+			[
+				"import os, pty, select, sys, time, subprocess",
+				"root, node, bin = sys.argv[1:]",
+				"master, slave = pty.openpty()",
+				"proc = subprocess.Popen(['/bin/zsh', '-f'], stdin=slave, stdout=slave, stderr=slave, cwd=root, start_new_session=True)",
+				"os.close(slave)",
+				"time.sleep(0.3)",
+				"os.write(master, f\"'{node}' '{bin}' init\\r\\n\".encode())",
+				"data = b''",
+				"deadline = time.time() + 2",
+				"while time.time() < deadline and proc.poll() is None and b'space selects' not in data:",
+				"    ready, _, _ = select.select([master], [], [], 0.1)",
+				"    data += os.read(master, 8192) if ready else b''",
+				"if proc.poll() is not None or b'[?1049l' in data:",
+				"    sys.stdout.buffer.write(data)",
+				"    raise SystemExit(0)",
+				"time.sleep(0.25)",
+				"os.write(master, b'\\r')",
+				"sys.stdout.buffer.write(b'STILL_OPEN\\n')",
+				"deadline = time.time() + 2",
+				"while time.time() < deadline and proc.poll() is None and b'Groups. codely' not in data:",
+				"    ready, _, _ = select.select([master], [], [], 0.1)",
+				"    data += os.read(master, 8192) if ready else b''",
+				"proc.kill() if proc.poll() is None else None",
+				"sys.stdout.buffer.write(data)",
+			].join("\n"),
+			root,
+			process.execPath,
+			bin,
+		],
+		{ stdio: ["ignore", "pipe", "pipe"] },
+	);
+	const [output, errors] = await new Promise((resolve, reject) => {
+		const stdout = [];
+		const stderr = [];
+		probe.stdout.on("data", (chunk) => stdout.push(chunk));
+		probe.stderr.on("data", (chunk) => stderr.push(chunk));
+		probe.on("error", reject);
+		probe.on("close", () =>
+			resolve([Buffer.concat(stdout).toString("utf8"), Buffer.concat(stderr).toString("utf8")]),
+		);
+	});
+	assert.equal(errors, "");
+	assert.match(output, /STILL_OPEN/);
+	assert.match(output, /space selects/);
+	assert.match(output, /Groups\. codely/);
+	assert.deepEqual(await readJson(join(root, "lint-ddd.config.json")), { groups: ["codely"], on: [], off: [] });
 });
 
 test("published files run inside node_modules", async () => {

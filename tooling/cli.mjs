@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { stdin, stdout } from "node:process";
 import { emitKeypressEvents } from "node:readline";
@@ -12,7 +12,7 @@ import {
 	selectionFromTree,
 	treeFromSelection,
 } from "./catalog.ts";
-import { eslintConfigSource, isOurEslintConfig, readSelection, writeSelection } from "./manifest.mjs";
+import { eslintConfigSource, isOurEslintConfig, readSelection, usesOurConfig, writeSelection } from "./manifest.mjs";
 
 const dependencyNames = [
 	"eslint",
@@ -99,7 +99,7 @@ const keyName = (key) => {
 	if (key.name === "space" || key.sequence === " ") {
 		return "space";
 	}
-	if (key.name === "return" || key.name === "enter") {
+	if (key.name === "return") {
 		return "return";
 	}
 	if (key.name === "up" || key.name === "down" || key.name === "left" || key.name === "right") {
@@ -187,13 +187,17 @@ const treeLines = ({ prompt, state }) => {
 };
 
 const ask = ({ prompt, state }) =>
-	new Promise((resolve) => {
-		const session = { state, onKeypress: undefined };
+	new Promise((resolve, reject) => {
+		const session = { state, onKeypress: undefined, isRaw: false, openedAt: Date.now() };
 		const stop = () => {
 			if (session.onKeypress !== undefined) {
 				stdin.off("keypress", session.onKeypress);
+				session.onKeypress = undefined;
 			}
-			stdin.setRawMode(false);
+			if (session.isRaw) {
+				stdin.setRawMode(false);
+				session.isRaw = false;
+			}
 			stdin.pause();
 		};
 		const paint = () => {
@@ -201,35 +205,52 @@ const ask = ({ prompt, state }) =>
 		};
 		const finish = (line) => {
 			stop();
-			stdout.write(line === undefined ? "\x1b[?25h\x1b[?1049l" : `\x1b[?25h\x1b[?1049l${line}\n`);
+			writeSync(stdout.fd, "\x1b[?25h\x1b[?1049l");
+			if (line !== undefined) {
+				writeSync(stdout.fd, `${line}\n`);
+			}
 		};
 		session.onKeypress = (_char, key) => {
-			const name = keyName(key);
-			if (name === "cancel") {
-				finish();
-				process.exitCode = 130;
-
-				return;
-			}
-			const next = checklistStep({ name, state: session.state });
-			session.state = next.state;
-			if (!next.isDone) {
-				if (next.shouldDraw) {
-					paint();
+			try {
+				const name = keyName(key);
+				if (name === "return" && Date.now() - session.openedAt < 200) {
+					return;
 				}
+				if (name === "cancel") {
+					finish();
+					process.exitCode = 130;
 
-				return;
+					return;
+				}
+				const next = checklistStep({ name, state: session.state });
+				session.state = next.state;
+				if (!next.isDone) {
+					if (next.shouldDraw) {
+						paint();
+					}
+
+					return;
+				}
+				const summary = selectionFromTree({ state: session.state, catalog: groups }).groups.join(", ");
+				finish(`${prompt} ${summary === "" ? "(none)" : summary}`);
+				resolve(session.state);
+			} catch (error) {
+				finish();
+				reject(error);
 			}
-			const summary = selectionFromTree({ state: session.state, catalog: groups }).groups.join(", ");
-			finish(`${prompt} ${summary === "" ? "(none)" : summary}`);
-			resolve(session.state);
 		};
-		emitKeypressEvents(stdin);
-		stdin.setRawMode(true);
-		stdin.resume();
-		stdout.write("\x1b[?1049h\x1b[?25l");
-		paint();
-		stdin.on("keypress", session.onKeypress);
+		try {
+			emitKeypressEvents(stdin);
+			stdin.setRawMode(true);
+			session.isRaw = true;
+			stdin.resume();
+			stdout.write("\x1b[?1049h\x1b[?25l");
+			paint();
+			stdin.on("keypress", session.onKeypress);
+		} catch (error) {
+			finish();
+			reject(error);
+		}
 	});
 
 const promptSelection = async ({ selection }) =>
@@ -277,7 +298,8 @@ const init = async (parsed) => {
 		throw new Error("package.json must be an object.");
 	}
 	const eslintPath = join(rootPath, "eslint.config.mjs");
-	if (existsSync(eslintPath) && !isOurEslintConfig(readFileSync(eslintPath, "utf8"))) {
+	const eslintSource = existsSync(eslintPath) ? readFileSync(eslintPath, "utf8") : undefined;
+	if (eslintSource !== undefined && !usesOurConfig(eslintSource)) {
 		throw new Error("eslint.config.mjs already exists.");
 	}
 	const configPath = join(rootPath, "lint-ddd.config.json");
@@ -285,7 +307,9 @@ const init = async (parsed) => {
 	const selection = await chooseSelection({ parsed, current });
 	const nextPackage = withDevDependencies(packageManifest);
 	writeSelection(rootPath, selection);
-	writeFileSync(eslintPath, eslintConfigSource);
+	if (eslintSource === undefined || isOurEslintConfig(eslintSource)) {
+		writeFileSync(eslintPath, eslintConfigSource);
+	}
 	writeFileSync(packagePath, `${JSON.stringify(nextPackage, null, 2)}\n`);
 	if (!existsSync(join(rootPath, "tsconfig.eslint.json"))) {
 		console.error("warning: tsconfig.eslint.json is missing. The strict-types group needs that file.");

@@ -87,8 +87,30 @@ const configuredRules = (selection, specs) => {
 
 const ruleIsUsed = (selection, ruleId) => isRuleActive({ selection, ruleId }) || selection.off.includes(ruleId);
 
-const usesTypescriptRules = (selection) =>
-	ruleIds.some((ruleId) => ruleId.startsWith("@typescript-eslint/") && ruleIsUsed(selection, ruleId));
+const typeAwarePolicies = new Set([
+	"policy/boolean-prefix",
+	"policy/named-parameters",
+	"policy/array-emptiness",
+	"policy/immutable-arrays",
+	"policy/parameter-mutation",
+	"policy/optional-nullable",
+	"policy/validated-input",
+	"policy/used-react-props",
+]);
+const usesTypeChecker = (selection) =>
+	ruleIds.some(
+		(ruleId) =>
+			isRuleActive({ selection, ruleId }) &&
+			(ruleId.startsWith("@typescript-eslint/") || typeAwarePolicies.has(ruleId)),
+	);
+const typeCheckerLanguage = ({ rootPath, providesParser }) => ({
+	parserOptions: {
+		projectService: false,
+		project: ["./tsconfig.eslint.json"],
+		tsconfigRootDir: rootPath,
+	},
+	...(providesParser ? {} : { parser: typescriptEslint.parser }),
+});
 
 const hostPlugins = (selection) => {
 	if (selection.groups.includes("codely")) {
@@ -106,7 +128,7 @@ const hostPlugins = (selection) => {
 };
 
 const typescriptBlock = (selection) => {
-	if (selection.groups.includes("codely") || !usesTypescriptRules(selection)) {
+	if (selection.groups.includes("codely")) {
 		return undefined;
 	}
 
@@ -149,23 +171,37 @@ const baseBlocks = ({ selection, rootPath }) => {
 	if (Object.keys(codeStyleRules).length !== 0) {
 		blocks.push({ rules: codeStyleRules });
 	}
+	if (ruleIsUsed(selection, "import/no-cycle")) {
+		blocks.push({
+			settings: {
+				"import-x/extensions": [".ts", ".tsx", ".cts", ".mts", ".js", ".jsx", ".cjs", ".mjs"],
+				"import-x/parsers": {
+					"@typescript-eslint/parser": [".ts", ".tsx", ".cts", ".mts"],
+				},
+				"import-x/resolver": { typescript: { project: `${rootPath}/tsconfig.eslint.json` } },
+			},
+		});
+	}
+	const hasActiveStrictRule = Object.keys(strictRules).some((ruleId) => isRuleActive({ selection, ruleId }));
 	const selectedStrictRules = configuredRules(selection, Object.entries(strictRules));
 	if (selectedStrictRules !== undefined) {
-		const hasActiveStrictRule = Object.keys(strictRules).some((ruleId) => isRuleActive({ selection, ruleId }));
-		const languageOptions = hasActiveStrictRule
-			? {
-					parserOptions: {
-						projectService: false,
-						project: ["./tsconfig.eslint.json"],
-						tsconfigRootDir: rootPath,
-					},
-					...(selection.groups.includes("codely") ? {} : { parser: typescriptEslint.parser }),
-				}
-			: undefined;
 		blocks.push({
 			files: ["**/*.{ts,tsx}"],
-			...(languageOptions === undefined ? {} : { languageOptions }),
+			...(hasActiveStrictRule
+				? {
+						languageOptions: typeCheckerLanguage({
+							rootPath,
+							providesParser: selection.groups.includes("codely"),
+						}),
+					}
+				: {}),
 			rules: selectedStrictRules,
+		});
+	}
+	if (usesTypeChecker(selection) && !hasActiveStrictRule) {
+		blocks.push({
+			files: ["**/*.{ts,tsx}"],
+			languageOptions: typeCheckerLanguage({ rootPath, providesParser: selection.groups.includes("codely") }),
 		});
 	}
 
@@ -173,7 +209,13 @@ const baseBlocks = ({ selection, rootPath }) => {
 };
 
 const policyBlocks = (selection) => {
-	const usesPolicy = ruleIds.some((ruleId) => ruleId.startsWith("policy/") && ruleIsUsed(selection, ruleId));
+	const usesPolicy = ruleIds.some(
+		(ruleId) =>
+			ruleIsUsed(selection, ruleId) &&
+			(ruleId.startsWith("policy/") ||
+				ruleId === "no-param-reassign" ||
+				ruleId === "@typescript-eslint/no-magic-numbers"),
+	);
 	if (!usesPolicy) {
 		return [];
 	}
@@ -279,6 +321,7 @@ const boundaryBlocks = ({ selection, rootPath }) => {
 			plugins: { boundaries },
 			settings: {
 				"boundaries/root-path": rootPath,
+				"boundaries/ignore": ["dist/**", "/dist/**", ".codegraph/**", "/.codegraph/**"],
 				"boundaries/elements": elements,
 				"boundaries/files": files,
 				"boundaries/dependency-nodes": ["import", "export", "require", "dynamic-import"],

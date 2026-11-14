@@ -29,7 +29,10 @@ const eslintBooleanOptions = new Set([
   "allowString",
   "allowNumber",
   "allowAny",
+  "allowBoolean",
   "allowNullish",
+  "allowNumberAndString",
+  "allowRegExp",
   "useTabs",
 ]);
 const mutators = new Set(["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin"]);

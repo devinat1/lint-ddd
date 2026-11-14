@@ -1,6 +1,6 @@
 {
   "name": "lint-ddd",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "Lint rules for a TypeScript ports-and-adapters codebase.",
   "repository": {
     "type": "git",

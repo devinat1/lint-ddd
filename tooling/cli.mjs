@@ -4,7 +4,7 @@ import { stdin, stdout } from "node:process";
 import { emitKeypressEvents } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { changeNames, checklistStep, groupNames, groups, ruleIds, selectionFromFlags } from "./catalog.ts";
+import { changeNames, checklistStep, groups, selectionFromFlags, selectionFromTree } from "./catalog.ts";
 import { eslintConfigSource, isOurEslintConfig, readSelection, writeSelection } from "./manifest.mjs";
 
 const dependencyNames = [
@@ -95,41 +95,100 @@ const keyName = (key) => {
 	if (key.name === "return" || key.name === "enter") {
 		return "return";
 	}
-	if (key.name === "up" || key.name === "down") {
+	if (key.name === "up" || key.name === "down" || key.name === "left" || key.name === "right") {
 		return key.name;
 	}
 
 	return "";
 };
 
-const groupDetails = Object.fromEntries(groups.map((group) => [group.name, group.detail]));
+const fitLine = ({ line, width }) => (line.length > width ? line.slice(0, width) : line);
 
-const checklistLines = ({ prompt, choices, details, state }) => {
-	const screenRows = stdout.rows > 0 ? stdout.rows : 24;
-	const screenColumns = stdout.columns > 0 ? stdout.columns : 80;
-	const room = Math.max(1, screenRows - 3);
-	const size = Math.min(choices.length, room);
-	const start = Math.min(Math.max(0, state.cursor - Math.floor((size - 1) / 2)), Math.max(0, choices.length - size));
-	const width = Math.max(20, screenColumns - 1);
-	const nameWidth =
-		details === undefined || choices.length === 0 ? 0 : Math.max(...choices.map((choice) => choice.length));
-	const fit = (line) => (line.length > width ? line.slice(0, width) : line);
-	const rows = choices.slice(start, start + size).map((choice, offset) => {
-		const index = start + offset;
-		const pointer = index === state.cursor ? ">" : " ";
-		const mark = state.selected.includes(index) ? "x" : " ";
-		const detail = details?.[choice];
-		const label = detail === undefined ? choice : `${choice.padEnd(nameWidth)}  ${detail}`;
+const pointsAt = ({ state, group, rule }) => state.cursor.group === group && state.cursor.rule === rule;
 
-		return fit(`${pointer} [${mark}] ${label}`);
-	});
+const groupMark = ({ state, index }) => {
+	const rules = state.rulesOn[index] ?? [];
+	if (rules.length === 0) {
+		return state.emptyOn.includes(index) ? "x" : " ";
+	}
+	if (rules.every((isOn) => isOn)) {
+		return "x";
+	}
+	if (rules.some((isOn) => isOn)) {
+		return "-";
+	}
 
-	return [fit(prompt), ...rows, "arrows move, space select, enter confirm"];
+	return " ";
 };
 
-const ask = ({ prompt, choices, details }) =>
+const childLine = ({ state, group, rule, ruleIndex, ruleCount, width }) => {
+	const branch = ruleIndex === ruleCount - 1 ? "└─" : "├─";
+	const prefix = pointsAt({ state, group, rule: ruleIndex }) ? "    > " : "      ";
+	const mark = state.rulesOn[group]?.[ruleIndex] === true ? "x" : " ";
+
+	return fitLine({ line: `${prefix}${branch} [${mark}] ${rule}`, width });
+};
+
+const groupBlock = ({ state, group, index, nameWidth, width }) => {
+	const pointer = pointsAt({ state, group: index, rule: null }) ? ">" : " ";
+	const mark = groupMark({ state, index });
+	const isOpen = state.expanded === index;
+	const glyph = group.rules.length === 0 ? "  " : ` ${isOpen ? "▾" : "▸"}`;
+	const line = fitLine({
+		line: `${pointer} [${mark}] ${group.name.padEnd(nameWidth)}${glyph}  ${group.detail}`,
+		width,
+	});
+	const children = isOpen
+		? group.rules.map((rule, ruleIndex) =>
+				childLine({ state, group: index, rule, ruleIndex, ruleCount: group.rules.length, width }),
+			)
+		: [];
+
+	return [line, ...children];
+};
+
+const treeLines = ({ prompt, state }) => {
+	const screenRows = stdout.rows > 0 ? stdout.rows : 24;
+	const screenColumns = stdout.columns > 0 ? stdout.columns : 80;
+	const width = Math.max(20, screenColumns - 1);
+	const nameWidth = Math.max(...groups.map((group) => group.name.length));
+	const drawn = groups.reduce(
+		(acc, group, index) => {
+			const block = groupBlock({ state, group, index, nameWidth, width });
+			const local = block.findIndex((_, row) =>
+				pointsAt({ state, group: index, rule: row === 0 ? null : row - 1 }),
+			);
+
+			return {
+				rows: [...acc.rows, ...block],
+				cursorRow: local === -1 ? acc.cursorRow : acc.rows.length + local,
+			};
+		},
+		{ rows: [], cursorRow: 0 },
+	);
+	const { rows, cursorRow } = drawn;
+	const room = Math.max(1, screenRows - 3);
+	const size = Math.min(rows.length, room);
+	const preferred = cursorRow - Math.floor((size - 1) / 2);
+	const start = Math.min(Math.max(0, preferred), Math.max(0, rows.length - size));
+
+	return [
+		fitLine({ line: prompt, width }),
+		...rows.slice(start, start + size),
+		"arrows move, left/right expand, space selects, enter confirms",
+	];
+};
+
+const initialTreeState = () => ({
+	cursor: { group: 0, rule: null },
+	expanded: null,
+	rulesOn: groups.map((group) => group.rules.map(() => false)),
+	emptyOn: [],
+});
+
+const ask = ({ prompt }) =>
 	new Promise((resolve) => {
-		const session = { state: { cursor: 0, selected: [] }, onKeypress: undefined };
+		const session = { state: initialTreeState(), onKeypress: undefined };
 		const stop = () => {
 			if (session.onKeypress !== undefined) {
 				stdin.off("keypress", session.onKeypress);
@@ -138,9 +197,7 @@ const ask = ({ prompt, choices, details }) =>
 			stdin.pause();
 		};
 		const paint = () => {
-			stdout.write(
-				`\x1b[H\x1b[J${checklistLines({ prompt, choices, details, state: session.state }).join("\n")}`,
-			);
+			stdout.write(`\x1b[H\x1b[J${treeLines({ prompt, state: session.state }).join("\n")}`);
 		};
 		const finish = (line) => {
 			stop();
@@ -154,7 +211,7 @@ const ask = ({ prompt, choices, details }) =>
 
 				return;
 			}
-			const next = checklistStep({ name, state: session.state, count: choices.length });
+			const next = checklistStep({ name, state: session.state });
 			session.state = next.state;
 			if (!next.isDone) {
 				if (next.shouldDraw) {
@@ -163,10 +220,9 @@ const ask = ({ prompt, choices, details }) =>
 
 				return;
 			}
-			const picked = choices.filter((_choice, index) => session.state.selected.includes(index));
-			const summary = picked.join(", ");
+			const summary = selectionFromTree({ state: session.state, catalog: groups }).groups.join(", ");
 			finish(`${prompt} ${summary === "" ? "(none)" : summary}`);
-			resolve(picked);
+			resolve(session.state);
 		};
 		emitKeypressEvents(stdin);
 		stdin.setRawMode(true);
@@ -176,13 +232,7 @@ const ask = ({ prompt, choices, details }) =>
 		stdin.on("keypress", session.onKeypress);
 	});
 
-const promptSelection = async () => {
-	const only = await ask({ prompt: "Groups.", choices: groupNames, details: groupDetails });
-	const on = await ask({ prompt: "Rules to force on.", choices: ruleIds });
-	const off = await ask({ prompt: "Rules to force off.", choices: ruleIds });
-
-	return selectionFromFlags({ isFull: false, only, on, off });
-};
+const promptSelection = async () => selectionFromTree({ state: await ask({ prompt: "Groups." }), catalog: groups });
 
 const chooseSelection = async (parsed) => {
 	const hasFlags = parsed.isFull || parsed.only.length !== 0 || parsed.on.length !== 0 || parsed.off.length !== 0;

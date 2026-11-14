@@ -233,36 +233,176 @@ export const parseSelection = (value: unknown): Selection => {
   });
 };
 
-type ChecklistState = { cursor: number; selected: readonly number[] };
+export type TreeCursor = { readonly group: number; readonly rule: number | null };
+
+export type TreeState = {
+  readonly cursor: TreeCursor;
+  readonly expanded: number | null;
+  readonly rulesOn: readonly (readonly boolean[])[];
+  readonly emptyOn: readonly number[];
+};
+
+const sameCursor = ({ left, right }: { left: TreeCursor; right: TreeCursor }): boolean =>
+  left.group === right.group && left.rule === right.rule;
+
+const visibleRows = (state: TreeState): readonly TreeCursor[] =>
+  state.rulesOn.flatMap((rules, group) => [
+    { group, rule: null },
+    ...(state.expanded === group ? Array.from({ length: rules.length }, (_, rule) => ({ group, rule })) : []),
+  ]);
+
+const movedCursor = ({ name, state }: { name: string; state: TreeState }): TreeCursor | undefined => {
+  if (name !== "up" && name !== "down") {
+    return undefined;
+  }
+  const rows = visibleRows(state);
+  if (rows.length === 0) {
+    return undefined;
+  }
+  const index = rows.findIndex((row) => sameCursor({ left: row, right: state.cursor }));
+  const current = index === -1 ? 0 : index;
+  const delta = name === "up" ? rows.length - 1 : 1;
+
+  return rows[(current + delta) % rows.length];
+};
+
+const nextExpanded = ({ name, state }: { name: string; state: TreeState }): number | null | undefined => {
+  if (name !== "left" && name !== "right") {
+    return undefined;
+  }
+  const { group, rule } = state.cursor;
+  const childCount = state.rulesOn[group]?.length ?? 0;
+  if (name === "left") {
+    return state.expanded === group ? null : state.expanded;
+  }
+  if (rule !== null || childCount === 0 || state.expanded === group) {
+    return state.expanded;
+  }
+
+  return group;
+};
+
+const withGroupRules = ({
+  state,
+  group,
+  rules,
+}: {
+  state: TreeState;
+  group: number;
+  rules: readonly boolean[];
+}): TreeState => ({
+  ...state,
+  rulesOn: state.rulesOn.map((row, index) => (index === group ? rules : row)),
+});
+
+const toggledRule = ({ state, group, rule }: { state: TreeState; group: number; rule: number }): TreeState =>
+  withGroupRules({
+    state,
+    group,
+    rules: (state.rulesOn[group] ?? []).map((isOn, index) => (index === rule ? !isOn : isOn)),
+  });
+
+const toggledGroup = (state: TreeState): TreeState => {
+  const { group } = state.cursor;
+  const rules = state.rulesOn[group] ?? [];
+  if (rules.length === 0) {
+    const emptyOn = state.emptyOn.includes(group)
+      ? state.emptyOn.filter((index) => index !== group)
+      : [...state.emptyOn, group];
+
+    return { ...state, emptyOn };
+  }
+
+  return withGroupRules({
+    state,
+    group,
+    rules: rules.map(() => !rules.every((isOn) => isOn)),
+  });
+};
+
+const toggled = (state: TreeState): TreeState => {
+  const { rule } = state.cursor;
+  if (rule === null) {
+    return toggledGroup(state);
+  }
+
+  return toggledRule({ state, group: state.cursor.group, rule });
+};
+
+const keptCursor = ({ name, state }: { name: string; state: TreeState }): TreeCursor => {
+  if (name === "left" && state.cursor.rule !== null) {
+    return { group: state.cursor.group, rule: null };
+  }
+
+  return state.cursor;
+};
 
 export const checklistStep = ({
   name,
   state,
-  count,
 }: {
   name: string;
-  state: ChecklistState;
-  count: number;
-}): { state: ChecklistState; isDone: boolean; shouldDraw: boolean } => {
+  state: TreeState;
+}): { state: TreeState; isDone: boolean; shouldDraw: boolean } => {
   if (name === "return") {
     return { state, isDone: true, shouldDraw: false };
   }
   if (name === "space") {
-    const selected = state.selected.includes(state.cursor)
-      ? state.selected.filter((index) => index !== state.cursor)
-      : [...state.selected, state.cursor];
-
-    return { state: { cursor: state.cursor, selected }, isDone: false, shouldDraw: true };
+    return { state: toggled(state), isDone: false, shouldDraw: true };
   }
-  if ((name === "up" || name === "down") && count > 0) {
-    const delta = name === "up" ? count - 1 : 1;
-
-    return {
-      state: { cursor: (state.cursor + delta) % count, selected: state.selected },
-      isDone: false,
-      shouldDraw: true,
-    };
+  const cursor = movedCursor({ name, state });
+  if (cursor !== undefined) {
+    return { state: { ...state, cursor }, isDone: false, shouldDraw: true };
+  }
+  const expanded = nextExpanded({ name, state });
+  if (expanded === undefined || expanded === state.expanded) {
+    return { state, isDone: false, shouldDraw: false };
   }
 
-  return { state, isDone: false, shouldDraw: false };
+  return { state: { ...state, expanded, cursor: keptCursor({ name, state }) }, isDone: false, shouldDraw: true };
+};
+
+const groupChoice = ({
+  group,
+  rulesOn,
+  isEmptyOn,
+}: {
+  group: { name: string; rules: readonly string[] };
+  rulesOn: readonly boolean[];
+  isEmptyOn: boolean;
+}): { groups: string[]; off: string[] } => {
+  if (group.rules.length === 0) {
+    return isEmptyOn ? { groups: [group.name], off: [] } : { groups: [], off: [] };
+  }
+  if (!rulesOn.some((isOn) => isOn)) {
+    return { groups: [], off: [] };
+  }
+
+  return {
+    groups: [group.name],
+    off: group.rules.filter((_, index) => !rulesOn[index]),
+  };
+};
+
+export const selectionFromTree = ({
+  state,
+  catalog,
+}: {
+  state: TreeState;
+  catalog: readonly { name: string; rules: readonly string[] }[];
+}): Selection => {
+  const chosen = catalog.map((group, index) =>
+    groupChoice({
+      group,
+      rulesOn: state.rulesOn[index] ?? [],
+      isEmptyOn: state.emptyOn.includes(index),
+    }),
+  );
+
+  return selectionFromFlags({
+    isFull: false,
+    only: chosen.flatMap((choice) => choice.groups),
+    on: [],
+    off: chosen.flatMap((choice) => choice.off),
+  });
 };

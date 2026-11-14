@@ -11,6 +11,7 @@ import {
 	groups,
 	isRuleActive,
 	selectionFromFlags,
+	selectionFromTree,
 } from "../catalog.ts";
 import { conventionRules } from "../conventionRules.ts";
 import { defineConfig } from "../eslint.config.mjs";
@@ -108,23 +109,109 @@ test("enable and disable keep unrelated exceptions", () => {
 	assert.deepEqual(enabled.off, []);
 });
 
-test("checklist cursor toggles with space and confirms with enter", () => {
-	const count = 3;
-	const down = checklistStep({ name: "down", count, state: { cursor: 0, selected: [] } });
-	assert.equal(down.state.cursor, 1);
+const closedTree = {
+	cursor: { group: 0, rule: null },
+	expanded: null,
+	rulesOn: [[], [false, false]],
+	emptyOn: [],
+};
+
+test("checklist moves onto rules and toggles a rule or a whole group", () => {
+	const down = checklistStep({ name: "down", state: closedTree });
 	assert.equal(down.shouldDraw, true);
-	const selected = checklistStep({ name: "space", count, state: down.state });
-	assert.deepEqual(selected.state.selected, [1]);
-	const cleared = checklistStep({ name: "space", count, state: selected.state });
-	assert.deepEqual(cleared.state.selected, []);
-	const wrapped = checklistStep({ name: "up", count, state: { cursor: 0, selected: [] } });
-	assert.equal(wrapped.state.cursor, 2);
-	const confirmed = checklistStep({ name: "return", count, state: selected.state });
+	assert.deepEqual(down.state.cursor, { group: 1, rule: null });
+	const wrapped = checklistStep({ name: "up", state: closedTree });
+	assert.deepEqual(wrapped.state.cursor, { group: 1, rule: null });
+	const opened = checklistStep({ name: "right", state: down.state });
+	assert.deepEqual(opened.state.expanded, 1);
+	const onRule = checklistStep({ name: "down", state: opened.state });
+	assert.deepEqual(onRule.state.cursor, { group: 1, rule: 0 });
+	const selected = checklistStep({ name: "space", state: onRule.state });
+	assert.deepEqual(selected.state.rulesOn[1], [true, false]);
+	const cleared = checklistStep({ name: "space", state: selected.state });
+	assert.deepEqual(cleared.state.rulesOn[1], [false, false]);
+	const allOn = checklistStep({
+		name: "space",
+		state: { ...selected.state, cursor: { group: 1, rule: null } },
+	});
+	assert.deepEqual(allOn.state.rulesOn[1], [true, true]);
+	const allOff = checklistStep({ name: "space", state: allOn.state });
+	assert.deepEqual(allOff.state.rulesOn[1], [false, false]);
+	const emptyOn = checklistStep({ name: "space", state: closedTree });
+	assert.deepEqual(emptyOn.state.emptyOn, [0]);
+	const emptyOff = checklistStep({ name: "space", state: emptyOn.state });
+	assert.deepEqual(emptyOff.state.emptyOn, []);
+	const confirmed = checklistStep({ name: "return", state: selected.state });
 	assert.equal(confirmed.isDone, true);
-	assert.deepEqual(confirmed.state.selected, [1]);
-	const ignored = checklistStep({ name: "left", count, state: down.state });
+	assert.deepEqual(confirmed.state.rulesOn, selected.state.rulesOn);
+	const ignored = checklistStep({ name: "left", state: closedTree });
 	assert.equal(ignored.shouldDraw, false);
-	assert.equal(ignored.state, down.state);
+	assert.equal(ignored.state, closedTree);
+});
+
+test("checklist keeps one group open and collapses back to that group", () => {
+	const opened = checklistStep({
+		name: "right",
+		state: { ...closedTree, cursor: { group: 1, rule: null } },
+	});
+	assert.equal(opened.isDone, false);
+	assert.deepEqual(opened.state.expanded, 1);
+	const stillOpen = checklistStep({ name: "right", state: opened.state });
+	assert.equal(stillOpen.shouldDraw, false);
+	assert.equal(stillOpen.state, opened.state);
+	const onRule = { ...opened.state, cursor: { group: 1, rule: 0 }, rulesOn: [[], [true, false]] };
+	const collapsed = checklistStep({ name: "left", state: onRule });
+	assert.equal(collapsed.state.expanded, null);
+	assert.deepEqual(collapsed.state.cursor, { group: 1, rule: null });
+	assert.deepEqual(collapsed.state.rulesOn, onRule.rulesOn);
+	const empty = checklistStep({ name: "right", state: closedTree });
+	assert.equal(empty.shouldDraw, false);
+	const other = checklistStep({
+		name: "right",
+		state: {
+			cursor: { group: 0, rule: null },
+			expanded: 1,
+			rulesOn: [[false], [true, false]],
+			emptyOn: [],
+		},
+	});
+	assert.equal(other.state.expanded, 0);
+	assert.deepEqual(other.state.rulesOn[1], [true, false]);
+});
+
+test("tree selection saves a partial group as the group plus the rules left off", () => {
+	const codeStyle = groups.findIndex((group) => group.name === "code-style");
+	const boundaries = groups.findIndex((group) => group.name === "boundaries");
+	const codely = groups.findIndex((group) => group.name === "codely");
+	const rulesOn = groups.map((group, index) => {
+		if (index === boundaries) {
+			return group.rules.map(() => true);
+		}
+		if (index === codeStyle) {
+			return group.rules.map((rule) => rule === "complexity");
+		}
+
+		return group.rules.map(() => false);
+	});
+	const selection = selectionFromTree({
+		state: { cursor: { group: codeStyle, rule: null }, expanded: codeStyle, rulesOn, emptyOn: [codely] },
+		catalog: groups,
+	});
+	assert.deepEqual(selection, {
+		groups: ["codely", "boundaries", "code-style"],
+		on: [],
+		off: groups[codeStyle].rules.filter((rule) => rule !== "complexity"),
+	});
+	const none = selectionFromTree({
+		state: {
+			cursor: { group: 0, rule: null },
+			expanded: null,
+			rulesOn: groups.map((group) => group.rules.map(() => false)),
+			emptyOn: [],
+		},
+		catalog: groups,
+	});
+	assert.deepEqual(none, { groups: [], on: [], off: [] });
 });
 
 test("defineConfig enables a lone rule, a group rule, and turns an exception off", () => {

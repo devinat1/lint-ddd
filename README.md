@@ -29,7 +29,7 @@ npx lint-ddd init --full
 npx lint-ddd init --only boundaries,policy-conventions --on policy/validated-input --off policy/boolean-prefix
 ```
 
-With a terminal and no selection flags, `init` shows three checklists: groups, rules to force on, and rules to force off. Without a terminal, pass `--full` or `--only`. `off` wins when a rule is also enabled by its group.
+With a terminal and no selection flags, `init` shows one group tree. Up and Down move between groups and the rules of the open group. Right opens a group and Left closes it. Only one group stays open. Space on a group turns every rule in it on or off. Space on a rule turns that rule on or off. Enter confirms. A group with any rule on is saved in `groups`, and the rules left off are saved in `off`. `codely` has no listed rules, so Space toggles that group. Without a terminal, pass `--full` or `--only`. `off` wins when a rule is also enabled by its group.
 
 `init` writes `lint-ddd.config.json`, an `eslint.config.mjs` that calls `defineConfig()`, and the lint devDependencies in `package.json`. It does not run `npm install`. It stops if `package.json` is missing, if `lint-ddd.config.json` already exists, or if `eslint.config.mjs` is not already the generated file. An existing `file:` or `link:` version of `lint-ddd` is left in place. Strict type rules read `tsconfig.eslint.json`.
 

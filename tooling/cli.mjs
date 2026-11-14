@@ -4,7 +4,14 @@ import { stdin, stdout } from "node:process";
 import { emitKeypressEvents } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { changeNames, checklistStep, groups, selectionFromFlags, selectionFromTree } from "./catalog.ts";
+import {
+	changeNames,
+	checklistStep,
+	groups,
+	selectionFromFlags,
+	selectionFromTree,
+	treeFromSelection,
+} from "./catalog.ts";
 import { eslintConfigSource, isOurEslintConfig, readSelection, writeSelection } from "./manifest.mjs";
 
 const dependencyNames = [
@@ -179,16 +186,9 @@ const treeLines = ({ prompt, state }) => {
 	];
 };
 
-const initialTreeState = () => ({
-	cursor: { group: 0, rule: null },
-	expanded: null,
-	rulesOn: groups.map((group) => group.rules.map(() => false)),
-	emptyOn: [],
-});
-
-const ask = ({ prompt }) =>
+const ask = ({ prompt, state }) =>
 	new Promise((resolve) => {
-		const session = { state: initialTreeState(), onKeypress: undefined };
+		const session = { state, onKeypress: undefined };
 		const stop = () => {
 			if (session.onKeypress !== undefined) {
 				stdin.off("keypress", session.onKeypress);
@@ -232,9 +232,13 @@ const ask = ({ prompt }) =>
 		stdin.on("keypress", session.onKeypress);
 	});
 
-const promptSelection = async () => selectionFromTree({ state: await ask({ prompt: "Groups." }), catalog: groups });
+const promptSelection = async ({ selection }) =>
+	selectionFromTree({
+		state: await ask({ prompt: "Groups.", state: treeFromSelection({ selection, catalog: groups }) }),
+		catalog: groups,
+	});
 
-const chooseSelection = async (parsed) => {
+const chooseSelection = async ({ parsed, current }) => {
 	const hasFlags = parsed.isFull || parsed.only.length !== 0 || parsed.on.length !== 0 || parsed.off.length !== 0;
 	if (hasFlags) {
 		return selectionFromFlags({ isFull: parsed.isFull, only: parsed.only, on: parsed.on, off: parsed.off });
@@ -243,7 +247,7 @@ const chooseSelection = async (parsed) => {
 		throw new Error("Pass --full or --only when there is no terminal.");
 	}
 
-	return promptSelection();
+	return promptSelection({ selection: current });
 };
 
 const withDevDependencies = (packageManifest) => {
@@ -276,15 +280,12 @@ const init = async (parsed) => {
 	if (existsSync(eslintPath) && !isOurEslintConfig(readFileSync(eslintPath, "utf8"))) {
 		throw new Error("eslint.config.mjs already exists.");
 	}
-	if (existsSync(join(rootPath, "lint-ddd.config.json"))) {
-		throw new Error("lint-ddd.config.json already exists.");
-	}
-	const selection = await chooseSelection(parsed);
+	const configPath = join(rootPath, "lint-ddd.config.json");
+	const current = existsSync(configPath) ? readSelection(rootPath) : { groups: [], on: [], off: [] };
+	const selection = await chooseSelection({ parsed, current });
 	const nextPackage = withDevDependencies(packageManifest);
 	writeSelection(rootPath, selection);
-	if (!existsSync(eslintPath)) {
-		writeFileSync(eslintPath, eslintConfigSource);
-	}
+	writeFileSync(eslintPath, eslintConfigSource);
 	writeFileSync(packagePath, `${JSON.stringify(nextPackage, null, 2)}\n`);
 	if (!existsSync(join(rootPath, "tsconfig.eslint.json"))) {
 		console.error("warning: tsconfig.eslint.json is missing. The strict-types group needs that file.");

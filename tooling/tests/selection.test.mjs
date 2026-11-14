@@ -12,6 +12,7 @@ import {
 	isRuleActive,
 	selectionFromFlags,
 	selectionFromTree,
+	treeFromSelection,
 } from "../catalog.ts";
 import { conventionRules } from "../conventionRules.ts";
 import { defineConfig } from "../eslint.config.mjs";
@@ -212,6 +213,65 @@ test("tree selection saves a partial group as the group plus the rules left off"
 		catalog: groups,
 	});
 	assert.deepEqual(none, { groups: [], on: [], off: [] });
+});
+
+test("tree opens from the installed selection and saves an unchecked rule as off", () => {
+	const codeStyle = groups.findIndex((group) => group.name === "code-style");
+	const validation = groups.findIndex((group) => group.name === "validation");
+	const codely = groups.findIndex((group) => group.name === "codely");
+	const boundaries = groups.find((group) => group.name === "boundaries");
+	const installed = selectionFromFlags({
+		isFull: false,
+		only: ["codely", "code-style", "boundaries"],
+		on: ["policy/validated-input"],
+		off: ["complexity", ...boundaries.rules],
+	});
+	const state = treeFromSelection({ selection: installed, catalog: groups });
+	assert.deepEqual(state.cursor, { group: 0, rule: null });
+	assert.equal(state.expanded, null);
+	assert.deepEqual(state.emptyOn, [codely]);
+	assert.deepEqual(
+		state.rulesOn[codeStyle],
+		groups[codeStyle].rules.map((rule) => rule !== "complexity"),
+	);
+	assert.deepEqual(
+		state.rulesOn[validation],
+		groups[validation].rules.map((rule) => rule === "policy/validated-input"),
+	);
+	assert.equal(
+		state.rulesOn[groups.findIndex((group) => group.name === "boundaries")].some((isOn) => isOn),
+		false,
+	);
+	const opened = checklistStep({
+		name: "right",
+		state: { ...state, cursor: { group: codeStyle, rule: null } },
+	});
+	const onComplexity = checklistStep({ name: "down", state: opened.state });
+	const onNext = checklistStep({ name: "down", state: onComplexity.state });
+	const removed = checklistStep({ name: "space", state: onNext.state });
+	const removedRule = groups[codeStyle].rules[1];
+	assert.equal(removed.state.rulesOn[codeStyle][1], false);
+	assert.deepEqual(selectionFromTree({ state: removed.state, catalog: groups }), {
+		groups: ["codely", "code-style", "validation"],
+		on: [],
+		off: [
+			...groups[codeStyle].rules.filter((rule) => rule === "complexity" || rule === removedRule),
+			...groups[validation].rules.filter((rule) => rule !== "policy/validated-input"),
+		],
+	});
+	const cleared = selectionFromTree({
+		state: treeFromSelection({
+			selection: selectionFromFlags({
+				isFull: false,
+				only: ["boundaries"],
+				on: [],
+				off: boundaries.rules,
+			}),
+			catalog: groups,
+		}),
+		catalog: groups,
+	});
+	assert.deepEqual(cleared, { groups: [], on: [], off: [] });
 });
 
 test("defineConfig enables a lone rule, a group rule, and turns an exception off", () => {

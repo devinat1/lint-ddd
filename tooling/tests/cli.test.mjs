@@ -93,17 +93,27 @@ test("enable and disable update the manifest without dropping exceptions", async
 	});
 });
 
-test("init refuses a second run, a foreign config, missing flags, and a missing package", async () => {
+test("init replaces an existing selection and still refuses a foreign config", async () => {
 	const root = await createRoot();
-	const first = await run({ cwd: root, args: ["init", "--full"] });
+	const first = await run({ cwd: root, args: ["init", "--only", "codely"] });
 	assert.equal(first.code, 0, first.stderr);
-	const written = await readFile(join(root, "lint-ddd.config.json"), "utf8");
-	const packageText = await readFile(join(root, "package.json"), "utf8");
-	const second = await run({ cwd: root, args: ["init", "--full"] });
-	assert.equal(second.code, 1);
-	assert.match(second.stderr, /already exists/);
-	assert.equal(await readFile(join(root, "lint-ddd.config.json"), "utf8"), written);
-	assert.equal(await readFile(join(root, "package.json"), "utf8"), packageText);
+	const installed = await readJson(join(root, "package.json"));
+	delete installed.devDependencies.eslint;
+	await writeFile(join(root, "package.json"), `${JSON.stringify(installed, null, 2)}\n`);
+	const unchanged = await readFile(join(root, "lint-ddd.config.json"), "utf8");
+	const blocked = await run({ cwd: root, args: ["init"] });
+	assert.equal(blocked.code, 1);
+	assert.match(blocked.stderr, /no terminal/);
+	assert.equal(await readFile(join(root, "lint-ddd.config.json"), "utf8"), unchanged);
+	const second = await run({ cwd: root, args: ["init", "--only", "boundaries"] });
+	assert.equal(second.code, 0, second.stderr);
+	assert.deepEqual(await readJson(join(root, "lint-ddd.config.json")), {
+		groups: ["boundaries"],
+		on: [],
+		off: [],
+	});
+	assert.equal(await readFile(join(root, "eslint.config.mjs"), "utf8"), eslintConfigSource);
+	assert.equal(typeof (await readJson(join(root, "package.json"))).devDependencies.eslint, "string");
 
 	const foreign = await createRoot();
 	await writeFile(join(foreign, "eslint.config.mjs"), "export default [];\n");
@@ -113,6 +123,17 @@ test("init refuses a second run, a foreign config, missing flags, and a missing 
 	assert.match(refused.stderr, /eslint\.config\.mjs already exists/);
 	await assert.rejects(access(join(foreign, "lint-ddd.config.json")));
 	assert.equal(await readFile(join(foreign, "package.json"), "utf8"), packageBefore);
+
+	const owned = await createRoot();
+	assert.equal((await run({ cwd: owned, args: ["init", "--only", "codely"] })).code, 0);
+	await writeFile(join(owned, "eslint.config.mjs"), "export default [];\n");
+	const ownedConfig = await readFile(join(owned, "lint-ddd.config.json"), "utf8");
+	const ownedPackage = await readFile(join(owned, "package.json"), "utf8");
+	const ownedRefusal = await run({ cwd: owned, args: ["init", "--only", "boundaries"] });
+	assert.equal(ownedRefusal.code, 1);
+	assert.match(ownedRefusal.stderr, /eslint\.config\.mjs already exists/);
+	assert.equal(await readFile(join(owned, "lint-ddd.config.json"), "utf8"), ownedConfig);
+	assert.equal(await readFile(join(owned, "package.json"), "utf8"), ownedPackage);
 
 	const silent = await createRoot();
 	const noFlags = await run({ cwd: silent, args: ["init"] });

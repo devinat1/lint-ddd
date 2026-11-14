@@ -242,6 +242,21 @@ export type TreeState = {
   readonly emptyOn: readonly number[];
 };
 
+export const treeFromSelection = ({
+  selection,
+  catalog,
+}: {
+  selection: Selection;
+  catalog: readonly { name: string; rules: readonly string[] }[];
+}): TreeState => ({
+  cursor: { group: 0, rule: null },
+  expanded: null,
+  rulesOn: catalog.map((group) => group.rules.map((ruleId) => isRuleActive({ selection, ruleId }))),
+  emptyOn: catalog.flatMap((group, index) =>
+    group.rules.length === 0 && selection.groups.includes(group.name) ? [index] : [],
+  ),
+});
+
 const sameCursor = ({ left, right }: { left: TreeCursor; right: TreeCursor }): boolean =>
   left.group === right.group && left.rule === right.rule;
 

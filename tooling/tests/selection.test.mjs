@@ -17,6 +17,7 @@ import {
 import { conventionRules } from "../conventionRules.ts";
 import { defineConfig } from "../eslint.config.mjs";
 import { codeRules, frontendRules, strictLintConfiguration } from "../eslint.rules.ts";
+import { hexagonalRules } from "../hexagonalRules.ts";
 import { presentationRules } from "../presentationRules.ts";
 import { validationRules } from "../validationRules.ts";
 
@@ -40,7 +41,7 @@ test("catalog lists the authored rules", () => {
 	assert.deepEqual(rulesFor("strict-types"), Object.keys(strictLintConfiguration[0].rules));
 	assert.deepEqual(
 		new Set(rulesFor("policy-conventions")),
-		new Set([...prefixed(conventionRules), "policy/comment-and-log", "no-param-reassign"]),
+		new Set([...prefixed(conventionRules), "policy/comment-and-log", "policy/readonly-model", "no-param-reassign"]),
 	);
 	assert.deepEqual(
 		new Set(rulesFor("validation")),
@@ -57,6 +58,7 @@ test("catalog lists the authored rules", () => {
 			"boundaries/no-unknown-files",
 			"boundaries/no-unknown-dependencies",
 			"boundaries/no-ignored-dependencies",
+			...prefixed(hexagonalRules).filter((ruleId) => ruleId !== "policy/readonly-model"),
 		]),
 	);
 });

@@ -31,6 +31,13 @@ External dependencies default to denied, except the configured role-specific lis
 - Complexity at most 15, nesting at most 4, functions at most 100 nonblank/noncomment lines; import cycles, unused bindings and unsorted imports are errors.
 - Strict type-aware safety includes unsafe assignments/calls/arguments/returns/assertions, strict boolean conditions, type-only imports/exports, and array syntax.
 - TypeScript booleans use `is`/`has`/`can`/`should` prefixes. Authored multiargument functions use a named parameter object, with the reference exceptions for externally dictated signatures.
+- Ambient effects stay in the layer that owns them. Domain, ports, and application cannot use `Date`, `Math.random`, `crypto`, `fetch`, timers, `process`, `console`, `Buffer`, `__dirname`, `Intl`, dynamic `import()`, `require()`, or side-effect imports. `Date` is read only in a secondary adapter and passed inward as a number. Randomness and the network stay in secondary adapters. Timers and `Buffer` stay in adapters. `process` is read in composition. `console` stays in secondary adapters and composition. Dynamic loads stay in adapters, composition, and presentation. `Intl` stays outside the core. `eval`, `Function`, and browser globals such as `document`, `window`, and `localStorage` are unavailable under `src/`.
+- The domain is synchronous: no `async`, `await`, generators, or `Promise`. Ports may return `Promise`. Application may await them.
+- A port file holds types, interfaces, and values such as Zod schemas. A function there is allowed only as a call argument, so a schema refinement can sit next to the contract.
+- An application file exports at most one function, and that function takes one object parameter. Helpers stay unexported.
+- Domain, ports, and application name their own exports. They do not use `export default`, `export *`, or `export { ... } from`.
+- A class in domain or application extends `Error` or a name ending in `Error`. Ports declare no classes. The core does not construct built-in errors such as `Error` or `TypeError`. Enums and namespaces are string unions.
+- Domain and port property signatures, index signatures, mapped types, class fields, parameter properties, arrays, and tuples are readonly.
 - Explicit empty-array comparisons, immutable array transformations and no mutation of function parameters.
 - Source messages/errors use named constants. Source numeric values use explanatory constants. JSON input must pass through a concrete Zod schema; importing Zod is allowed but it has not been installed for this step.
 - Annotated `@nullable` optional domain/port fields explicitly include null.
@@ -42,13 +49,13 @@ External dependencies default to denied, except the configured role-specific lis
 
 `npm run check` runs policy regression tests, lint over all authored code, then TypeScript checking (including custom rules).
 
-The policy tests create temporary typed fixtures in the real layer paths, invoke the actual root ESLint configuration, and remove their files afterward. The tests reject parser failures and check exact rule IDs so a parse error or unresolved import cannot masquerade as a successful boundary check. Tests cover domain/application/port separation, composition wiring, both adapter roles, independent adapter isolation, presentation dependencies, type-only and dynamic dependencies, core external imports, unknown files, general conventions, JSX rules, product test filenames, error-message classification, and colocated test imports.
+The policy tests create temporary typed fixtures in the real layer paths, invoke the actual root ESLint configuration, and remove their files afterward. The tests reject parser failures and check exact rule IDs so a parse error or unresolved import cannot masquerade as a successful boundary check. Tests cover domain/application/port separation, composition wiring, both adapter roles, independent adapter isolation, presentation dependencies, type-only and dynamic dependencies, core external imports, unknown files, general conventions, JSX rules, product test filenames, error-message classification, colocated test imports, ambient effects by layer, a synchronous domain, port contracts, use-case shape, direct core exports, domain error classes, and readonly domain models.
 
 ## Limits and deliberate omissions
 
 - Dependency checks are not a runtime sandbox. They do not prove that a function implements its port (TypeScript checks assignments) or that a module contains the right business logic.
-- Import checks alone do not forbid ambient globals such as `Math.random`, `Date`, `document` or `fetch` in the core; keeping those behind ports also requires review.
-- A webpage framework is not part of this policy. Next-specific lint rules and browser/server boundaries are omitted.
+- Ambient-effect checks do not see a clock, random source, or other effect captured in a callback that was created in an allowed layer and passed into the core.
+- A webpage framework is not part of this policy. Next-specific lint rules and browser/server component boundaries are omitted. `policy/ambient-effects` rejects browser globals under `src/`.
 - No Prisma, deployment, shared-contract package, blog/wiki ownership or repository-specific filesystem allowlist is copied. The ReadyMeet `insufficient_credits` selector is one of those shared-contract rules and is not copied. Unknown source files are checked by ESLint, but empty directories and symlinks are not policed by a separate folder checker.
 - Next route-signature exceptions and `Response.json` / `NextResponse.json` carve-outs are not copied. Proxy Node built-in allowlists and package-captured element patterns are not copied. Tailwind checks stay enabled.
 - Static Tailwind and JSON validation analysis retains the conservative proof limits of the reference implementations.

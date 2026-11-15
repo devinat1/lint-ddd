@@ -265,6 +265,324 @@ test("product code cannot import a colocated test, and same-adapter files can im
 	});
 });
 
+test("ambient effects stay in the layer that owns them", async () => {
+	await check({
+		filePath: paths.domain,
+		code: "export const now = Date.now();\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const total = Math.abs(-1);\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const roll = Math.random();\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.secondary,
+		code: "export const now = Date.now();\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.application,
+		code: "export const load = (): Promise<Response> => fetch('/orders');\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.application,
+		code: "declare const orders: { load: () => Promise<string> }; export const load = (): Promise<string> => orders.load();\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.presentation,
+		code: "export const token = localStorage.getItem('token');\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.presentation,
+		code: "export const read = ({ token }: { token: string }): string => token;\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+});
+
+test("process, loading, and browser globals stay at the edge", async () => {
+	await check({
+		filePath: paths.primary,
+		code: "export const port = process.env.PORT;\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.composition,
+		code: "export const port = process.env.PORT;\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const loaded = import('./lintPolicyFixture.ts');\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.primary,
+		code: "export const loaded = import('./lintPolicyFixture.ts');\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "import './lintPolicyFixture.ts';\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.composition,
+		code: "import './lintPolicyFixture.ts';\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const label = new Intl.NumberFormat('en').format(1);\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.presentation,
+		code: "export const label = new Intl.NumberFormat('en').format(1);\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const ran = crypto.randomUUID();\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const place = ({ location }: { location: string }): string => location;\n",
+		rule: "policy/ambient-effects",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const value = globalThis.fetch('/orders');\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.presentation,
+		code: "export const isBrowser = typeof window !== 'undefined';\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export type Instant = Date;\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const run = new Function('return 1');\n",
+		rule: "policy/ambient-effects",
+		shouldFail: true,
+	});
+});
+
+test("the domain stays synchronous", async () => {
+	await check({
+		filePath: paths.domain,
+		code: "export const load = async (): Promise<number> => 1;\n",
+		rule: "policy/sync-domain",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export type Saved = Promise<void>;\n",
+		rule: "policy/sync-domain",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export function* values(): Generator<number> { yield 1; }\n",
+		rule: "policy/sync-domain",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const age = ({ now }: { now: number }): number => now;\n",
+		rule: "policy/sync-domain",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.ports,
+		code: "export type Repository = { save: () => Promise<void> };\n",
+		rule: "policy/sync-domain",
+		shouldFail: false,
+	});
+});
+
+test("ports hold contracts rather than behavior", async () => {
+	await check({
+		filePath: paths.ports,
+		code: "export const parse = (value: string): string => value;\n",
+		rule: "policy/port-contracts",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.ports,
+		code: "export enum Status { Open = 'open' }\n",
+		rule: "policy/port-contracts",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.ports,
+		code: "declare const refine: (check: (value: string) => boolean) => string;\nexport const schema = refine((value) => value.length > 0);\nexport type Repository = { save: (value: string) => void };\n",
+		rule: "policy/port-contracts",
+		shouldFail: false,
+	});
+});
+
+test("an application file exports one use case", async () => {
+	await check({
+		filePath: paths.application,
+		code: "export const place = ({ id }: { id: string }): string => id;\nexport const cancel = ({ id }: { id: string }): string => id;\n",
+		rule: "policy/use-case",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.application,
+		code: "export const place = (id: string): string => id;\n",
+		rule: "policy/use-case",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.application,
+		code: "const normalize = (value: string): string => value.trim();\nexport const place = ({ id }: { id: string }): string => normalize(id);\n",
+		rule: "policy/use-case",
+		shouldFail: false,
+	});
+	await check({
+		filePath: paths.application,
+		code: "export type PlaceOrder = { id: string };\n",
+		rule: "policy/use-case",
+		shouldFail: false,
+	});
+});
+
+test("the core names its own exports", async () => {
+	await check({
+		filePath: paths.domain,
+		code: "export * from './lintPolicyFixture.ts';\n",
+		rule: "policy/direct-exports",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export default 1;\n",
+		rule: "policy/direct-exports",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "const value = 1;\nexport { value };\n",
+		rule: "policy/direct-exports",
+		shouldFail: false,
+	});
+});
+
+test("the core throws domain error classes", async () => {
+	await check({
+		filePath: paths.domain,
+		code: "export class Order {}\n",
+		rule: "policy/core-errors",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const fail = new Error('Failure.');\n",
+		rule: "policy/core-errors",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export enum Status { Open = 'open' }\n",
+		rule: "policy/core-errors",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export namespace Orders { export type Id = string }\n",
+		rule: "policy/core-errors",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.ports,
+		code: "export class OrderError extends Error {}\n",
+		rule: "policy/core-errors",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export class OrderRejected extends Error {}\nexport const reject = (): OrderRejected => new OrderRejected();\n",
+		rule: "policy/core-errors",
+		shouldFail: false,
+	});
+});
+
+test("domain and port models are readonly", async () => {
+	await check({
+		filePath: paths.domain,
+		code: "export type Order = { id: string };\n",
+		rule: "policy/readonly-model",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export type Order = { readonly id: string; readonly ids: string[] };\n",
+		rule: "policy/readonly-model",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export const pair: [string, number] = ['a', 1];\n",
+		rule: "policy/readonly-model",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export type Flags<Key extends string> = { [KeyName in Key]: string };\n",
+		rule: "policy/readonly-model",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export class OrderRejected extends Error { code: string; constructor(code: string) { super(); this.code = code; } }\n",
+		rule: "policy/readonly-model",
+		shouldFail: true,
+	});
+	await check({
+		filePath: paths.domain,
+		code: "export type Order = { readonly id: string; readonly ids: readonly string[] };\nexport const pair: readonly [string, number] = ['a', 1];\nexport type Flags<Key extends string> = { readonly [KeyName in Key]: string };\nexport class OrderRejected extends Error { readonly code: string; constructor(code: string) { super(); this.code = code; } }\n",
+		rule: "policy/readonly-model",
+		shouldFail: false,
+	});
+});
+
 test("frontend rules reject inline styling and margin spacing", async () => {
 	await check({
 		filePath: paths.presentation,

@@ -265,6 +265,24 @@ const policyBlocks = (selection) => {
 	if (reactPropRules !== undefined) {
 		blocks.push({ files: ["src/presentation/**/*.tsx"], rules: reactPropRules });
 	}
+	const productTests = ["**/*.{test,spec}.{ts,tsx}"];
+	[
+		{
+			files: ["src/{domain,ports,application,adapters,composition,presentation}/**/*.{ts,tsx}"],
+			specs: [["policy/ambient-effects", "error"]],
+		},
+		{ files: ["src/domain/**/*.ts"], specs: [["policy/sync-domain", "error"]] },
+		{ files: ["src/ports/**/*.ts"], specs: [["policy/port-contracts", "error"]] },
+		{ files: ["src/application/**/*.ts"], specs: [["policy/use-case", "error"]] },
+		{ files: ["src/{domain,ports,application}/**/*.ts"], specs: [["policy/direct-exports", "error"]] },
+		{ files: ["src/{domain,ports,application}/**/*.ts"], specs: [["policy/core-errors", "error"]] },
+		{ files: ["src/{domain,ports}/**/*.ts"], specs: [["policy/readonly-model", "error"]] },
+	].forEach(({ files, specs }) => {
+		const rules = configuredRules(selection, specs);
+		if (rules !== undefined) {
+			blocks.push({ files, ignores: productTests, rules });
+		}
+	});
 
 	return blocks;
 };

@@ -7,9 +7,9 @@ These folders show the rules in `tooling/catalog.ts`. Each group is a directory.
 This repository ignores `examples/**` in its own ESLint config. The snippets are for reading. A boundary or layer rule reports only when the file sits on the path in the first comment.
 
 - [codely](codely/README.md) — Prettier, sorted imports, unused imports, and baseline TypeScript checks
-- [boundaries](boundaries) — which layers may import which other layers
+- [boundaries](boundaries) — layer imports, ambient effects, and core module shape
 - [strict-types](strict-types) — strict TypeScript checks and Prettier formatting
 - [code-style](code-style) — complexity, nesting, function length, and cycles
-- [policy-conventions](policy-conventions) — names, parameters, immutability, and test files
+- [policy-conventions](policy-conventions) — names, parameters, immutability, readonly models, and test files
 - [validation](validation) — Zod for JSON input, named messages, and magic numbers
 - [presentation](presentation) — JSX structure, Tailwind spacing, and React props

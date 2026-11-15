@@ -2,12 +2,18 @@ export const groups: readonly { name: string; detail: string; rules: readonly st
   { name: "codely", detail: "Prettier, sorted imports, unused imports, and baseline TypeScript checks.", rules: [] },
   {
     name: "boundaries",
-    detail: "Which layers may import which other layers.",
+    detail: "Layer imports, ambient effects, and core module shape.",
     rules: [
       "boundaries/dependencies",
       "boundaries/no-unknown-files",
       "boundaries/no-unknown-dependencies",
       "boundaries/no-ignored-dependencies",
+      "policy/ambient-effects",
+      "policy/sync-domain",
+      "policy/port-contracts",
+      "policy/use-case",
+      "policy/direct-exports",
+      "policy/core-errors",
     ],
   },
   {
@@ -60,6 +66,7 @@ export const groups: readonly { name: string; detail: string; rules: readonly st
       "policy/optional-nullable",
       "policy/typescript-tests",
       "policy/comment-and-log",
+      "policy/readonly-model",
       "no-param-reassign",
     ],
   },

@@ -54,7 +54,7 @@ The groups are `codely`, `boundaries`, `strict-types`, `code-style`, `policy-con
 
 1. `eslint.config.mjs` loads `tooling/eslint.config.mjs`.
 2. Its `elements` list gives each source folder a role. Its `dependencies` table specifies which roles that folder can import.
-3. `eslint-plugin-boundaries` reports forbidden imports. For example, application can import a port but not a concrete secondary adapter; composition can import both.
+3. `eslint-plugin-boundaries` reports forbidden imports. For example, application can import a port but not a concrete secondary adapter; composition can import both. The rest of the boundaries group limits ambient effects and the shape of core modules, which imports cannot see.
 4. `tooling/tests/architecture.test.mjs` creates temporary, empty typed fixtures, lints snippets against the real configuration, checks the exact rule responsible, and removes the fixture files.
 
 See [the lint policy](docs/lint-policy.md) for scope and limits.

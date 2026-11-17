@@ -1,9 +1,18 @@
-import { boundaryRules } from "./boundaryRules.ts";
-import { conventionRules } from "./conventionRules.ts";
-import { hexagonalRules } from "./hexagonalRules.ts";
-import { presentationRules } from "./presentationRules.ts";
-import { validationRules } from "./validationRules.ts";
+import { boundaryRules } from './boundary_rules.ts';
+import { conventionRules } from './convention_rules.ts';
+import { hexagonalRules } from './hexagonal_rules.ts';
+import { enumBooleanRule, nasaRules } from './nasa_rules.ts';
+import { presentationRules } from './presentation_rules.ts';
+import { validationRules } from './validation_rules.ts';
 
 export const policyPlugin = {
-  rules: { ...boundaryRules, ...conventionRules, ...hexagonalRules, ...presentationRules, ...validationRules },
+  rules: {
+    ...boundaryRules,
+    ...conventionRules,
+    ...enumBooleanRule,
+    ...hexagonalRules,
+    ...nasaRules,
+    ...presentationRules,
+    ...validationRules,
+  },
 };

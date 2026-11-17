@@ -1,102 +1,156 @@
-import type { TSESTree } from "@typescript-eslint/utils";
-import { ESLintUtils } from "@typescript-eslint/utils";
+import type { TSESTree } from '@typescript-eslint/utils';
+import { ESLintUtils } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(() => "docs/lint-policy.md");
-const isConstantObject = (node: TSESTree.Node | null): boolean =>
-  node?.type === "ObjectExpression" ||
-  ((node?.type === "TSAsExpression" || node?.type === "TSSatisfiesExpression") && isConstantObject(node.expression));
-const literalMessageFields = new Set(["code", "error", "message", "prompt", "system", "instructions", "text"]);
+import { readPath } from './read_field.ts';
+
+const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
+function isConstantObject(node: TSESTree.Node | null): boolean {
+  const steps = Array.from({ length: 8 });
+  const found = steps.reduce(
+    (state: { node: TSESTree.Node | null; isMatched: boolean }) => {
+      if (state.isMatched) {
+        return state;
+      }
+      const current = state.node;
+      if (current === null) {
+        return state;
+      }
+      if (current.type === 'ObjectExpression') {
+        return { node: current, isMatched: true };
+      }
+      if (current.type === 'TSAsExpression' || current.type === 'TSSatisfiesExpression') {
+        const expression = current.expression;
+
+        return { node: expression, isMatched: false };
+      }
+
+      return { node: null, isMatched: false };
+    },
+    { node, isMatched: false },
+  );
+
+  return found.isMatched;
+}
 const readStaticText = (node: TSESTree.Node | null | undefined): string | null => {
-  if (node?.type === "Literal" && typeof node.value === "string") {
+  if (node?.type === 'Literal' && typeof node.value === 'string') {
     return node.value;
   }
-  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
-    return node.quasis[0]?.value.cooked ?? null;
+  if (node?.type !== 'TemplateLiteral') {
+    return null;
   }
+  const expressions2 = node.expressions;
+  if (expressions2.length !== 0) {
+    return null;
+  }
+  const quasis2 = node.quasis;
+  const entry = quasis2[0];
 
-  return null;
+  return readPath({ value: entry, first: 'value', second: 'cooked' }) ?? null;
 };
 
 export const boundaryRules = {
-  "comment-and-log": createRule({
-    name: "comment-and-log",
+  'comment-and-log': createRule({
+    name: 'comment-and-log',
     meta: {
-      docs: { description: "Enforce the documented authored-code convention." },
-      type: "suggestion",
+      docs: { description: 'Enforce the documented authored-code convention.' },
+      type: 'suggestion',
       schema: [],
       messages: {
-        todo: "Write TODO(cleanup): followed by the specific temporary constraint.",
-        period: "End literal or template log messages with a period.",
+        todo: 'Write TODO(cleanup): followed by the specific temporary constraint.',
+        period: 'End literal or template log messages with a period.',
       },
     },
     defaultOptions: [],
     create(context) {
       return {
         Program() {
-          context.sourceCode.getAllComments().forEach((comment) => {
+          const sourceCode2 = context.sourceCode;
+          sourceCode2.getAllComments().forEach((comment) => {
             if (/\bTODO\b/.test(comment.value) && /\bTODO\b(?!\(cleanup\):\s+\S)/.test(comment.value)) {
-              context.report({ loc: comment.loc, messageId: "todo" });
+              context.report({ loc: comment.loc, messageId: 'todo' });
             }
           });
         },
         CallExpression(node) {
           const callee = node.callee;
+          if (callee.type !== 'MemberExpression') {
+            return;
+          }
+          const object2 = callee.object;
+          const property2 = callee.property;
           if (
-            callee.type !== "MemberExpression" ||
-            callee.object.type !== "Identifier" ||
-            !["console", "logger", "log"].includes(callee.object.name) ||
-            callee.property.type !== "Identifier" ||
-            !["log", "info", "warn", "error", "debug", "trace", "fatal"].includes(callee.property.name)
+            object2.type !== 'Identifier' ||
+            !['console', 'logger', 'log'].includes(object2.name) ||
+            property2.type !== 'Identifier' ||
+            !['log', 'info', 'warn', 'error', 'debug', 'trace', 'fatal'].includes(property2.name)
           ) {
             return;
           }
-          const argument = node.arguments.at(0);
+          const arguments2 = node.arguments;
+          const argument = arguments2.at(0);
           if (!argument) {
             return;
           }
+          const quasis3 = argument.type === 'TemplateLiteral' ? argument.quasis : [];
+          const quasi = quasis3.at(-1);
           const ending =
-            argument.type === "TemplateLiteral" ? argument.quasis.at(-1)?.value.cooked : readStaticText(argument);
-          if (ending !== null && ending !== undefined && !ending.trimEnd().endsWith(".")) {
-            context.report({ node: argument, messageId: "period" });
+            argument.type === 'TemplateLiteral'
+              ? readPath({ value: quasi, first: 'value', second: 'cooked' })
+              : readStaticText(argument);
+          if (ending !== null && ending !== undefined && !ending.trimEnd().endsWith('.')) {
+            context.report({ node: argument, messageId: 'period' });
           }
         },
       };
     },
   }),
-  "named-messages": createRule({
-    name: "named-messages",
+  'named-messages': createRule({
+    name: 'named-messages',
     meta: {
-      docs: { description: "Enforce the documented authored-code convention." },
-      type: "suggestion",
+      docs: { description: 'Enforce the documented authored-code convention.' },
+      type: 'suggestion',
       schema: [],
       messages: {
         constant:
-          "Move API codes, error messages, prompts, and user-facing message text into named domain constants or copy modules.",
+          'Move API codes, error messages, prompts, and user-facing message text into named domain constants or copy modules.',
       },
     },
     defaultOptions: [],
     create(context) {
       const check = (node: TSESTree.Node | null | undefined) => {
-        if (node && (readStaticText(node) !== null || node.type === "TemplateLiteral")) {
-          context.report({ node, messageId: "constant" });
+        if (node && (readStaticText(node) !== null || node.type === 'TemplateLiteral')) {
+          context.report({ node, messageId: 'constant' });
         }
       };
 
       return {
         Property(node) {
-          const name = node.key.type === "Identifier" && !node.computed ? node.key.name : readStaticText(node.key);
+          const literalMessageFields = new Set([
+            'code',
+            'error',
+            'message',
+            'prompt',
+            'system',
+            'instructions',
+            'text',
+          ]);
+          const key2 = node.key;
+          const name = key2.type === 'Identifier' && !node.computed ? key2.name : readStaticText(node.key);
           // Constant declarations are the intended home for grouped copy and protocol strings.
-          const ancestors = context.sourceCode.getAncestors(node);
+          const sourceCode3 = context.sourceCode;
+          const ancestors = sourceCode3.getAncestors(node);
           if (
             !ancestors.some((ancestor) =>
-              ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(ancestor.type),
+              ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(ancestor.type),
             ) &&
-            ancestors.some(
-              (ancestor) =>
-                ancestor.type === "VariableDeclarator" &&
-                ancestor.parent.kind === "const" &&
-                isConstantObject(ancestor.init),
-            )
+            ancestors.some((ancestor) => {
+              if (ancestor.type !== 'VariableDeclarator') {
+                return false;
+              }
+              const parent2 = ancestor.parent;
+
+              return parent2.kind === 'const' && isConstantObject(ancestor.init);
+            })
           ) {
             return;
           }
@@ -105,33 +159,41 @@ export const boundaryRules = {
           }
         },
         NewExpression(node) {
-          if (node.callee.type === "Identifier" && /Error$/.test(node.callee.name)) {
-            check(node.arguments[0]);
+          const callee2 = node.callee;
+          if (callee2.type === 'Identifier' && /Error$/.test(callee2.name)) {
+            const arguments3 = node.arguments;
+            check(arguments3[0]);
           }
         },
         JSXExpressionContainer(node) {
-          if (node.parent.type !== "JSXElement") {
+          const parent3 = node.parent;
+          if (parent3.type !== 'JSXElement') {
             return;
           }
-          const name = node.parent.openingElement.name;
-          if (name.type === "JSXIdentifier" && ["button", "a", "label", "option", "summary"].includes(name.name)) {
+          const openingElement2 = parent3.openingElement;
+          const name = openingElement2.name;
+          if (name.type === 'JSXIdentifier' && ['button', 'a', 'label', 'option', 'summary'].includes(name.name)) {
             return;
           }
           check(node.expression);
         },
         JSXText(node) {
-          if (node.value.trim().length === 0) {
+          const value4 = node.value;
+          if (value4.trim().length === 0) {
             return;
           }
           const parent = node.parent;
-          if (
-            parent.type === "JSXElement" &&
-            parent.openingElement.name.type === "JSXIdentifier" &&
-            ["button", "a", "label", "option", "summary"].includes(parent.openingElement.name.name)
-          ) {
+          if (parent.type !== 'JSXElement') {
+            context.report({ node, messageId: 'constant' });
+
             return;
           }
-          context.report({ node, messageId: "constant" });
+          const openingElement3 = parent.openingElement;
+          const name2 = openingElement3.name;
+          if (name2.type === 'JSXIdentifier' && ['button', 'a', 'label', 'option', 'summary'].includes(name2.name)) {
+            return;
+          }
+          context.report({ node, messageId: 'constant' });
         },
       };
     },

@@ -8,7 +8,7 @@
   },
   "type": "module",
   "bin": {
-    "lint-ddd": "dist/bin/lint-ddd.mjs"
+    "lint-ddd": "dist/bin/lint_ddd.mjs"
   },
   "exports": {
     ".": "./dist/tooling/eslint.config.mjs"
@@ -22,8 +22,8 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 --report-unused-disable-directives",
+    "lint:fix": "eslint . --fix --max-warnings 0 --report-unused-disable-directives",
     "typecheck": "tsc -p tsconfig.eslint.json",
     "build": "node tooling/build.mjs",
     "prepare": "node tooling/build.mjs",
@@ -35,7 +35,9 @@
     "eslint-config-codely": "^4.5.0",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-boundaries": "^7.2.0",
+    "eslint-plugin-check-file": "^2.8.0",
     "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-jsdoc": "^65.4.9",
     "eslint-plugin-prettier": "^5.5.6",
     "typescript-eslint": "^8.71.1"
   },

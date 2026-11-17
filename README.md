@@ -48,7 +48,7 @@ npx lint-ddd disable policy/static-tailwind
 npx lint-ddd dry-run --only boundaries --off boundaries/no-unknown-files
 ```
 
-The groups are `codely`, `boundaries`, `strict-types`, `code-style`, `policy-conventions`, `validation`, and `presentation`. Layer folders stay `src/domain`, `src/ports`, `src/application`, `src/adapters/primary/*`, `src/adapters/secondary/*`, `src/composition`, `src/presentation`, `tests`, and `tooling`.
+The groups are `codely`, `boundaries`, `strict-types`, `code-style`, `nasa`, `policy-conventions`, `validation`, and `presentation`. Layer folders stay `src/domain`, `src/ports`, `src/application`, `src/adapters/primary/*`, `src/adapters/secondary/*`, `src/composition`, `src/presentation`, `tests`, and `tooling`.
 
 ## Walkthrough
 

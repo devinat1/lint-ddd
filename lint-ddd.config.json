@@ -4,6 +4,7 @@
     "boundaries",
     "strict-types",
     "code-style",
+    "nasa",
     "policy-conventions",
     "validation",
     "presentation"

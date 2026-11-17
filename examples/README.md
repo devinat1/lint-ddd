@@ -10,6 +10,7 @@ This repository ignores `examples/**` in its own ESLint config. The snippets are
 - [boundaries](boundaries) — layer imports, ambient effects, and core module shape
 - [strict-types](strict-types) — strict TypeScript checks and Prettier formatting
 - [code-style](code-style) — complexity, nesting, function length, and cycles
+- [nasa](nasa) — simple control flow, bounded loops, small scope, checked returns, and one member access
 - [policy-conventions](policy-conventions) — names, parameters, immutability, readonly models, and test files
 - [validation](validation) — Zod for JSON input, named messages, and magic numbers
 - [presentation](presentation) — JSX structure, Tailwind spacing, and React props

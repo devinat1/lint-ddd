@@ -588,6 +588,22 @@ test('domain and port models are readonly', async () => {
   });
 });
 
+test('JSX files skip the TypeScript naming convention', async () => {
+  const component = 'export function Button(): void {}\n';
+  await check({
+    filePath: paths.application,
+    code: component,
+    rule: '@typescript-eslint/naming-convention',
+    shouldFail: true,
+  });
+  await check({
+    filePath: paths.presentation,
+    code: component,
+    rule: '@typescript-eslint/naming-convention',
+    shouldFail: false,
+  });
+});
+
 test('frontend rules reject inline styling and margin spacing', async () => {
   await check({
     filePath: paths.presentation,

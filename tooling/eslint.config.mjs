@@ -489,6 +489,12 @@ const styleOverrides = (selection) => {
       },
     });
   }
+  if (isRuleActive({ selection, ruleId: '@typescript-eslint/naming-convention' })) {
+    blocks.push({
+      files: ['**/*.{tsx,jsx}'],
+      rules: { '@typescript-eslint/naming-convention': 'off' },
+    });
+  }
 
   return blocks;
 };

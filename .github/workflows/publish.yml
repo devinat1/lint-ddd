@@ -57,6 +57,10 @@ jobs:
       - if: steps.gate.outputs.released != 'true'
         run: npm ci
 
+      - name: Install zsh
+        if: steps.gate.outputs.released != 'true'
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - if: steps.gate.outputs.released != 'true'
         run: npm run check
 

@@ -5,6 +5,8 @@ import ts from 'typescript';
 import { readFieldIf } from './read_field.ts';
 
 const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
+
+const ruleOptions: [] = [];
 const externalContractAnnotation = /@external[ \t]+[^\s*]/;
 type PrefixContext = TSESLint.RuleContext<'prefix', []>;
 type PrefixNode = TSESTree.Identifier | TSESTree.Literal;
@@ -458,8 +460,8 @@ export const conventionRules = {
       messages: {
         prefix: 'Name boolean bindings and fields with is, has, can, or should followed by a capitalized word.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const check = (node: TSESTree.Identifier | TSESTree.Literal) => {
         reportUnprefixedBoolean({ node, context });
@@ -486,8 +488,8 @@ export const conventionRules = {
         object:
           'Use one named parameter object for authored multiargument functions; inline callbacks and externally typed callbacks retain their required signatures.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const functionSelector =
         'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression, TSFunctionType, TSMethodSignature, TSDeclareFunction';
@@ -508,8 +510,8 @@ export const conventionRules = {
       messages: {
         empty: 'Compare array.length === 0 (or !== 0) instead of equivalent numeric, truthy, or negated length checks.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         BinaryExpression(node) {
@@ -577,8 +579,8 @@ export const conventionRules = {
         nullable:
           'Include null in this @nullable optional record field. Omission and explicit null have different meanings.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         'TSPropertySignature[optional=true]'(node: TSESTree.TSPropertySignature) {
@@ -614,8 +616,8 @@ export const conventionRules = {
       type: 'problem',
       schema: [],
       messages: { mutation: 'Copy parameter data before using a known native mutator.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         "AssignmentExpression, UpdateExpression, UnaryExpression[operator='delete']"(
@@ -639,8 +641,8 @@ export const conventionRules = {
         mutation:
           'Use an immutable array transformation. Mutating a fresh array expression or an immediately copied array is permitted.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         CallExpression(node) {
@@ -666,8 +668,8 @@ export const conventionRules = {
       messages: {
         typescript: 'Product tests are *.test.ts files.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         Program(node) {

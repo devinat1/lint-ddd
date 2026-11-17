@@ -4,6 +4,8 @@ import ts from 'typescript';
 
 const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
 
+const ruleOptions: [] = [];
+
 function unwrapParent(node: TSESTree.Node): TSESTree.Node {
   const steps = Array.from({ length: 8 });
   const found = steps.reduce(
@@ -39,8 +41,8 @@ export const validationRules = {
         schema:
           'Validate JSON.parse and Request/Response.json data with a concrete Zod schema, directly or through a same-variable parse/safeParse without other raw-data reads. unknown/any schemas do not validate shape.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const services = ESLintUtils.getParserServices(context);
 

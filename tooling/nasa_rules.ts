@@ -3,6 +3,8 @@ import { ASTUtils, ESLintUtils } from '@typescript-eslint/utils';
 import ts from 'typescript';
 
 const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
+
+const ruleOptions: [] = [];
 type Variable = TSESLint.Scope.Variable;
 type Scope = TSESLint.Scope.Scope;
 type FunctionNode = TSESTree.FunctionDeclaration | TSESTree.FunctionExpression | TSESTree.ArrowFunctionExpression;
@@ -680,8 +682,8 @@ export const nasaRules = {
       type: 'problem',
       schema: [],
       messages: { cycle: 'Do not call this function directly or through another function in the same file.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const initial: RecursionState = {
         sourceCode: context.sourceCode,
@@ -741,8 +743,8 @@ export const nasaRules = {
         bound:
           'Compare a counter with a numeric literal, or a const initialized with one, and update that counter in the body.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         WhileStatement(node) {
@@ -767,8 +769,8 @@ export const nasaRules = {
       type: 'suggestion',
       schema: [],
       messages: { scope: 'Declare this binding in the nested block that contains every reference.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         VariableDeclaration(node) {
@@ -787,8 +789,8 @@ export const nasaRules = {
       type: 'problem',
       schema: [],
       messages: { unused: 'Use the result of this non-void call. void does not count.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const reportUnused = (node: TSESTree.CallExpression | TSESTree.NewExpression | TSESTree.AwaitExpression) => {
         if (!resultIsUnused(node)) {
@@ -822,8 +824,8 @@ export const nasaRules = {
       type: 'problem',
       schema: [],
       messages: { chain: 'Assign the inner member to a local before reading another member.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         MemberExpression(node) {
@@ -845,8 +847,8 @@ export const enumBooleanRule = {
       type: 'problem',
       schema: [],
       messages: { condition: 'Do not use an enum, or a union that includes one, as a condition, Boolean(), or !!.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const report = (node: TSESTree.Node) => {
         const services = ESLintUtils.getParserServices(context);

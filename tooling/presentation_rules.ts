@@ -4,6 +4,8 @@ import { ESLintUtils } from '@typescript-eslint/utils';
 import { readPath } from './read_field.ts';
 
 const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
+
+const ruleOptions: [] = [];
 type ClassJob =
   | { op: 'eval'; node: TSESTree.Node | null }
   | { op: 'concat' }
@@ -135,8 +137,8 @@ export const presentationRules = {
         redundant:
           'Remove a provably redundant default-breakpoint class with the same static utility and no intervening overlapping override.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         JSXAttribute(node) {
@@ -159,8 +161,8 @@ export const presentationRules = {
       type: 'suggestion',
       schema: [],
       messages: { unused: 'Remove the unused authored React prop field {{name}} or read it in the component.' },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression'(

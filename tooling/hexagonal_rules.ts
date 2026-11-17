@@ -4,6 +4,8 @@ import { ASTUtils, ESLintUtils } from '@typescript-eslint/utils';
 import { readPath } from './read_field.ts';
 
 const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
+
+const ruleOptions: [] = [];
 const layerMarkers = [
   ['primary', '/src/adapters/primary/'],
   ['secondary', '/src/adapters/secondary/'],
@@ -336,8 +338,8 @@ export const hexagonalRules = {
         intl: 'Use Intl outside the domain, ports, and application.',
         forbidden: 'Keep this browser or runtime global behind a port.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const layer = layerOf({ filename: context.filename });
       if (layer === null) {
@@ -376,8 +378,8 @@ export const hexagonalRules = {
       messages: {
         sync: 'Keep the domain synchronous. Ports may return Promise, and application may await them.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       if (layerOf({ filename: context.filename }) !== 'domain') {
         return {};
@@ -426,8 +428,8 @@ export const hexagonalRules = {
         contract:
           'A port file holds types, interfaces, and values. Move functions, classes, enums, and namespaces out.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       if (layerOf({ filename: context.filename }) !== 'ports') {
         return {};
@@ -459,8 +461,8 @@ export const hexagonalRules = {
         one: 'Export one use case function from an application file.',
         object: 'A use case takes one object parameter for its ports and input.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       if (layerOf({ filename: context.filename }) !== 'application') {
         return {};
@@ -493,8 +495,8 @@ export const hexagonalRules = {
       messages: {
         direct: 'Export the core name from the file that defines it. Do not re-export or use a default export.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       if (!isCore(layerOf({ filename: context.filename }))) {
         return {};
@@ -526,8 +528,8 @@ export const hexagonalRules = {
         class: 'A core class must extend Error or a name ending in Error.',
         builtin: 'Throw a domain error class, not a built-in error.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const layer = layerOf({ filename: context.filename });
       if (!isCore(layer)) {
@@ -564,8 +566,8 @@ export const hexagonalRules = {
         member: 'Mark this domain or port member readonly.',
         collection: 'Use a readonly array or tuple in the domain and ports.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       const layer = layerOf({ filename: context.filename });
       if (layer !== 'domain' && layer !== 'ports') {

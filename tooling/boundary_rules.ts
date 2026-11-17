@@ -4,6 +4,8 @@ import { ESLintUtils } from '@typescript-eslint/utils';
 import { readPath } from './read_field.ts';
 
 const createRule = ESLintUtils.RuleCreator(() => 'docs/lint-policy.md');
+
+const ruleOptions: [] = [];
 function isConstantObject(node: TSESTree.Node | null): boolean {
   const steps = Array.from({ length: 8 });
   const found = steps.reduce(
@@ -144,8 +146,8 @@ export const boundaryRules = {
         todo: 'Write TODO(cleanup): followed by the specific temporary constraint.',
         period: 'End literal or template log messages with a period.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         Program() {
@@ -199,8 +201,8 @@ export const boundaryRules = {
         constant:
           'Move API codes, error messages, prompts, and user-facing message text into named domain constants or copy modules.',
       },
+      defaultOptions: ruleOptions,
     },
-    defaultOptions: [],
     create(context) {
       return {
         Property(node) {

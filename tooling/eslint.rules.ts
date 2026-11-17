@@ -16,7 +16,7 @@ export const codeRules = {
     },
     { selector: "VariableDeclaration[kind='var']", message: 'Use const instead of var.' },
     {
-      selector: 'ForStatement, ForInStatement, ForOfStatement',
+      selector: 'ForStatement, ForInStatement, ForOfStatement, WhileStatement, DoWhileStatement',
       message: 'Use array or stream methods instead of loop statements.',
     },
     { selector: 'TSNonNullExpression', message: 'Narrow nullable values instead of asserting non-null.' },

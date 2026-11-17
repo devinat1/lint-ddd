@@ -58,21 +58,21 @@ function reportConstant({ context, node }: { context: ConstantContext; node: TSE
   }
 }
 
-function isOutsideFunction(ancestors: TSESTree.Node[]) {
-  return !ancestors.some((ancestor) =>
-    ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(ancestor.type),
-  );
-}
-
 function isConstObjectCopy(ancestors: TSESTree.Node[]) {
-  return ancestors.some((ancestor) => {
-    if (ancestor.type !== 'VariableDeclarator') {
-      return false;
-    }
-    const parent2 = ancestor.parent;
+  const owner = ancestors
+    .slice()
+    .reverse()
+    .find((ancestor) =>
+      ['VariableDeclarator', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(
+        ancestor.type,
+      ),
+    );
+  if (owner?.type !== 'VariableDeclarator') {
+    return false;
+  }
+  const parent = owner.parent;
 
-    return parent2.kind === 'const' && isConstantObject(ancestor.init);
-  });
+  return parent.kind === 'const' && isConstantObject(owner.init);
 }
 
 function namedMessageProperty({ context, node }: { context: ConstantContext; node: TSESTree.Property }) {
@@ -81,7 +81,7 @@ function namedMessageProperty({ context, node }: { context: ConstantContext; nod
   const name = key2.type === 'Identifier' && !node.computed ? key2.name : readStaticText(node.key);
   const sourceCode3 = context.sourceCode;
   const ancestors = sourceCode3.getAncestors(node);
-  if (isOutsideFunction(ancestors) && isConstObjectCopy(ancestors)) {
+  if (isConstObjectCopy(ancestors)) {
     return;
   }
   if (name !== null && literalMessageFields.has(name)) {
@@ -199,7 +199,7 @@ export const boundaryRules = {
       schema: [],
       messages: {
         constant:
-          'Move API codes, error messages, prompts, and user-facing message text into named domain constants or copy modules.',
+          'Move API codes, error messages, prompts, and user-facing message text into named constants or copy objects in the smallest scope that uses them.',
       },
       defaultOptions: ruleOptions,
     },

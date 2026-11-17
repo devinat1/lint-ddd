@@ -408,8 +408,34 @@ function reportExtraParameters({
   context.report({ node, messageId: 'object' });
 }
 
-function reportUnprefixedBoolean({ node, context }: { node: PrefixNode; context: PrefixContext }) {
+function hasBooleanPrefix({
+  node,
+  context,
+  name,
+}: {
+  node: PrefixNode;
+  context: PrefixContext;
+  name: string;
+}): boolean {
   const booleanPrefix = /^(is|has|can|should)[A-Z0-9_]/;
+  if (booleanPrefix.test(name)) {
+    return true;
+  }
+  if (node.type !== 'Identifier' || !name.startsWith('_') || !booleanPrefix.test(name.slice(1))) {
+    return false;
+  }
+  const sourceCode = context.sourceCode;
+  const variable = ASTUtils.findVariable(sourceCode.getScope(node), node);
+  const definitions = variable?.defs;
+  const references = variable?.references;
+
+  return (
+    definitions?.some((definition) => definition.type === 'Parameter') === true &&
+    references?.every((reference) => !reference.isRead()) === true
+  );
+}
+
+function reportUnprefixedBoolean({ node, context }: { node: PrefixNode; context: PrefixContext }) {
   const services = ESLintUtils.getParserServices(context);
   const program2 = services.program;
   const checker = program2.getTypeChecker();
@@ -444,7 +470,7 @@ function reportUnprefixedBoolean({ node, context }: { node: PrefixNode; context:
 
       return (part.flags & typeFlags3.BooleanLike) !== 0;
     }) &&
-    !booleanPrefix.test(name)
+    !hasBooleanPrefix({ node, context, name })
   ) {
     context.report({ node, messageId: 'prefix' });
   }

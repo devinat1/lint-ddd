@@ -4,6 +4,8 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { after, test } from 'node:test';
 
+import { defineConfig } from '../eslint.config.mjs';
+
 const env2 = process.env;
 env2.TSESTREE_SINGLE_RUN = 'false';
 const paths = {
@@ -641,7 +643,7 @@ test('google and nasa checks reject the added forms', async () => {
   await check({
     filePath: paths.application,
     code: 'export const read = (): number => { while (true) { return 1; } };\n',
-    rule: 'policy/bounded-loop',
+    rule: 'no-restricted-syntax',
     shouldFail: true,
   });
   await check({
@@ -656,4 +658,88 @@ test('google and nasa checks reject the added forms', async () => {
     rule: 'policy/single-dereference',
     shouldFail: false,
   });
+});
+
+test('unused boolean parameters keep the underscore and boolean prefix conventions', async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText('export const indexes = [true].map((_isReady, index) => index);\n', {
+    filePath: paths.secondary,
+  });
+  assert.deepEqual(result.messages, []);
+  await check({
+    filePath: paths.secondary,
+    code: 'export const values = [true].map((_isReady) => _isReady);\n',
+    rule: 'policy/boolean-prefix',
+    shouldFail: true,
+  });
+  await check({
+    filePath: paths.secondary,
+    code: 'export const indexes = [true].map((_ready, index) => index);\n',
+    rule: 'policy/boolean-prefix',
+    shouldFail: true,
+  });
+});
+
+test('message objects follow smallest scope without permitting inline messages', async () => {
+  const eslint = new ESLint();
+  const code =
+    "/** Read the message. */\nexport function read(): string {\n  const copy = { message: 'Hello.' };\n\n  return copy.message;\n}\n";
+  const [result] = await eslint.lintText(code, { filePath: paths.secondary });
+  assert.deepEqual(result.messages, []);
+  await check({
+    filePath: paths.secondary,
+    code: "const copy = { message: 'Hello.' }; export function read(): string { return copy.message; }\n",
+    rule: 'policy/smallest-scope',
+    shouldFail: true,
+  });
+  await Promise.all(
+    [
+      "export function read() { return { message: 'Hello.' }; }\n",
+      "const api = { read() { return { message: 'Hello.' }; } }; export const read = api.read;\n",
+      "declare function send(value: unknown): void; send({ message: 'Hello.' });\n",
+    ].map((code) => check({ filePath: paths.secondary, code, rule: 'policy/named-messages', shouldFail: true })),
+  );
+});
+
+test('const-only rejects while and do loops without asking for mutable counters', async () => {
+  const eslint = new ESLint();
+  await Promise.all(
+    [
+      'export const run = (): void => { const state = { count: 0 }; while (state.count < 1) { state.count += 1; } };\n',
+      'export const run = (): void => { const state = { count: 0 }; do { state.count += 1; } while (state.count < 1); };\n',
+    ].map(async (code) => {
+      const [result] = await eslint.lintText(code, { filePath: paths.secondary });
+      assert.equal(result.fatalErrorCount, 0);
+      const messages = result.messages;
+      assert.equal(
+        messages.some((message) => message.ruleId === 'no-restricted-syntax'),
+        true,
+      );
+      assert.equal(
+        messages.some((message) => message.ruleId === 'policy/bounded-loop'),
+        false,
+      );
+    }),
+  );
+  const [result] = await eslint.lintText('export const values = [0, 1].map((value) => value + 1);\n', {
+    filePath: paths.secondary,
+  });
+  assert.deepEqual(result.messages, []);
+});
+
+test('bounded loops remain available without the const-only policy', async () => {
+  const eslint = new ESLint({
+    overrideConfigFile: true,
+    overrideConfig: defineConfig(process.cwd(), { groups: ['nasa'], on: [], off: [] }),
+  });
+  const [allowed] = await eslint.lintText('let count = 0; while (count < 1) { count += 1; }\n', {
+    filePath: paths.secondary,
+  });
+  assert.deepEqual(allowed.messages, []);
+  const [forbidden] = await eslint.lintText('while (true) { break; }\n', { filePath: paths.secondary });
+  const messages = forbidden.messages;
+  assert.equal(
+    messages.some((message) => message.ruleId === 'policy/bounded-loop'),
+    true,
+  );
 });

@@ -503,7 +503,7 @@ const nasaBlocks = (selection) => {
   const astRules = configuredRules(selection, [
     ['no-labels', 'error'],
     ['policy/no-recursion', 'error'],
-    ['policy/bounded-loop', 'error'],
+    ['policy/bounded-loop', isRuleActive({ selection, ruleId: 'no-restricted-syntax' }) ? 'off' : 'error'],
     ['policy/smallest-scope', 'error'],
     ['policy/single-dereference', 'error'],
   ]);
@@ -536,4 +536,5 @@ export const defineConfig = (rootPath = process.cwd(), selection = readSelection
   ...policyBlocks(selection),
   ...nasaBlocks(selection),
   ...boundaryBlocks({ selection, rootPath }),
+  { rules: Object.fromEntries(Array.from(selection.off, (ruleId) => [ruleId, 'off'])) },
 ];

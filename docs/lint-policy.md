@@ -25,12 +25,12 @@ External dependencies default to denied, except the configured role-specific lis
 
 ## Shared conventions
 
-- `const`, no `var`/`let`, no `for`/`for-in`/`for-of`, no non-null assertions, literal dependency specifiers, explicit caught failures, async/await instead of promise chains.
+- `const`, no `var`/`let`, no `for`/`for-in`/`for-of`/`while`/`do…while`, no non-null assertions, literal dependency specifiers, explicit caught failures, async/await instead of promise chains.
 - Classify errors with an error class or code. Do not compare or search `error.message`, `err.message`, or `cause.message`.
 - Product tests under `src` and `tests` are `*.test.ts` files. `*.spec.*`, `*.test.js`, and `*.test.tsx` are rejected. `tooling/tests/*.test.mjs` stays JavaScript because those tests exercise the ESLint config.
 - Complexity at most 15, nesting at most 4, functions at most 60 nonblank/noncomment lines; import cycles, unused bindings and unsorted imports are errors.
 - Strict type-aware safety includes unsafe assignments/calls/arguments/returns/assertions, strict boolean conditions, type-only imports/exports, and array syntax.
-- TypeScript booleans use `is`/`has`/`can`/`should` prefixes. Authored multiargument functions use a named parameter object, with the reference exceptions for externally dictated signatures.
+- TypeScript booleans use `is`/`has`/`can`/`should` prefixes. Unused boolean parameters may add one leading underscore, such as `_isReady`; used parameters keep the normal prefix. Authored multiargument functions use a named parameter object, with the reference exceptions for externally dictated signatures.
 - Ambient effects stay in the layer that owns them. Domain, ports, and application cannot use `Date`, `Math.random`, `crypto`, `fetch`, timers, `process`, `console`, `Buffer`, `__dirname`, `Intl`, dynamic `import()`, `require()`, or side-effect imports. `Date` is read only in a secondary adapter and passed inward as a number. Randomness and the network stay in secondary adapters. Timers and `Buffer` stay in adapters. `process` is read in composition. `console` stays in secondary adapters and composition. Dynamic loads stay in adapters, composition, and presentation. `Intl` stays outside the core. `eval`, `Function`, and browser globals such as `document`, `window`, and `localStorage` are unavailable under `src/`.
 - The domain is synchronous: no `async`, `await`, generators, or `Promise`. Ports may return `Promise`. Application may await them.
 - A port file holds types, interfaces, and values such as Zod schemas. A function there is allowed only as a call argument, so a schema refinement can sit next to the contract.
@@ -39,13 +39,15 @@ External dependencies default to denied, except the configured role-specific lis
 - A class in domain or application extends `Error` or a name ending in `Error`. Ports declare no classes. The core does not construct built-in errors such as `Error` or `TypeError`. Enums and namespaces are string unions.
 - Domain and port property signatures, index signatures, mapped types, class fields, parameter properties, arrays, and tuples are readonly.
 - Explicit empty-array comparisons, immutable array transformations and no mutation of function parameters.
-- Source messages/errors use named constants. Source numeric values use explanatory constants. JSON input must pass through a concrete Zod schema; importing Zod is allowed but it has not been installed for this step.
+- Source messages/errors use named constants or constant message objects in the smallest scope that uses them. Function-local message objects are allowed; inline message objects in calls or returns are not. Source numeric values use explanatory constants. JSON input must pass through a concrete Zod schema; importing Zod is allowed but it has not been installed for this step.
 - Annotated `@nullable` optional domain/port fields explicitly include null.
 - JSX uses div/span for layout/prose, native accessible controls, ternaries, no inline styles, no margins, even Tailwind spacing and no provably redundant breakpoints. Tailwind is not installed yet.
 - TODOs use `TODO(cleanup):` with a reason; literal log messages end with periods.
 - TypeScript and JavaScript use single quotes and two-space indentation. A string that contains `'` may use double quotes. File stems are `snake_case`, including `.test.ts` and bracket route names. Folders may contain `_`.
 - Google checks that this package adds stay on even where they are stricter than the Google TypeScript guide: `const` only, no `for`, no non-null assertions, and the other bans already listed.
-- NASA Power of 10, as far as it can be checked in TypeScript: no labels, no direct or same-file recursion, `while` and `do` loops count toward a numeric literal, functions stay within 60 lines, bindings use the smallest block, non-void calls including `await` are used, and a member read stops at one level (`a.b`, not `a.b.c`). Array methods stay; their bound is the receiver's length. There is no assertion quota, because a check TypeScript can prove is already rejected.
+- NASA Power of 10, as far as it can be checked in TypeScript: no labels or direct/same-file recursion. Functions stay within 60 lines, bindings use the smallest block, non-void calls including `await` are used, and a member read stops at one level (`a.b`, not `a.b.c`). When the const-only syntax policy is disabled, `while` and `do` loops must count toward a numeric literal or a constant initialized with one. Otherwise these loops are forbidden and the bounded-counter check is inactive. Array methods stay; their bound is the receiver's length. There is no assertion quota, because a check TypeScript can prove is already rejected.
+
+Explicit rule entries in `off` override inherited presets for every authored JavaScript and TypeScript file type.
 
 ## Verification
 

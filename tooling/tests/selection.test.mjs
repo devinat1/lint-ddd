@@ -1,3 +1,4 @@
+import { ESLint } from 'eslint';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,7 @@ import {
   groupNames,
   groups,
   isRuleActive,
+  ruleIds,
   selectionFromFlags,
   selectionFromTree,
   treeFromSelection,
@@ -394,4 +396,43 @@ test('defineConfig enables a lone rule, a group rule, and turns an exception off
   assert.equal(ruleValue(full, 'policy/boolean-prefix'), 'error');
   assert.equal(ruleValue(full, 'check-file/folder-naming-convention')[0], 'error');
   assert.equal(ruleValue(full, 'prettier/prettier')[0], 'error');
+});
+
+test('explicit disables override inherited rules for every authored file type', async () => {
+  await Promise.all(
+    ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'].map(async (extension) => {
+      const rootPath = fileURLToPath(new URL('../..', import.meta.url));
+      const eslint = new ESLint({
+        overrideConfigFile: true,
+        overrideConfig: defineConfig(rootPath, { ...fullSelection(), off: ruleIds }),
+      });
+      const config = await eslint.calculateConfigForFile(`tooling/selection_probe.${extension}`);
+      assert.notEqual(config, undefined);
+      ruleIds.forEach((ruleId) => {
+        const rules = config.rules;
+        const value = rules[ruleId];
+        assert.equal(value?.[0] ?? 0, 0, `${extension}: ${ruleId}`);
+      });
+    }),
+  );
+});
+
+test('disabled JavaScript rules do not report', async () => {
+  const rootPath = fileURLToPath(new URL('../..', import.meta.url));
+  const eslint = new ESLint({
+    overrideConfigFile: true,
+    overrideConfig: defineConfig(rootPath, {
+      ...fullSelection(),
+      off: ['prettier/prettier', 'no-param-reassign'],
+    }),
+  });
+  const [result] = await eslint.lintText('export const read = (value) => { value = 1; return value }', {
+    filePath: 'tooling/selection_probe.mjs',
+  });
+  assert.equal(result.fatalErrorCount, 0);
+  const messages = result.messages;
+  assert.equal(
+    messages.some((message) => ['prettier/prettier', 'no-param-reassign'].includes(message.ruleId)),
+    false,
+  );
 });

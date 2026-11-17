@@ -71,6 +71,31 @@ test('init writes a partial selection, dependencies, and no install', async () =
   await assert.rejects(access(join(root, 'node_modules')));
 });
 
+test('init keeps TypeScript 7 on the native compiler', async () => {
+  const root = await createRoot({
+    name: 'sample',
+    version: '0.0.0',
+    devDependencies: { typescript: '^7.0.2' },
+  });
+  const result = await run({ cwd: root, args: ['init', '--full'] });
+  assert.equal(result.code, 0, result.stderr);
+  const packageJson = await readJson(join(root, 'package.json'));
+  const devDependencies7 = packageJson.devDependencies;
+  assert.equal(devDependencies7.typescript, 'npm:@typescript/typescript6@^6.0.2');
+  assert.equal(devDependencies7['@typescript/native'], 'npm:typescript@^7.0.2');
+  const aliased = await createRoot({
+    name: 'sample',
+    version: '0.0.0',
+    devDependencies: { typescript: 'npm:@typescript/typescript6@^6.0.2' },
+  });
+  const aliasResult = await run({ cwd: aliased, args: ['init', '--full'] });
+  assert.equal(aliasResult.code, 0, aliasResult.stderr);
+  const aliasPackage = await readJson(join(aliased, 'package.json'));
+  const devDependencies8 = aliasPackage.devDependencies;
+  assert.equal(devDependencies8.typescript, 'npm:@typescript/typescript6@^6.0.2');
+  assert.equal(devDependencies8['@typescript/native'], undefined);
+});
+
 test('init --full and enable accept the nasa group and the added rules', async () => {
   const root = await createRoot();
   const full = await run({ cwd: root, args: ['init', '--full'] });

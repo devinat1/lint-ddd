@@ -317,10 +317,30 @@ function rangeOf(name) {
   return range;
 }
 
+function majorOf(spec) {
+  const match = typeof spec === 'string' ? /\d+/.exec(spec) : null;
+
+  return match === null ? undefined : match[0];
+}
+
+function typescriptDependencies(spec) {
+  if (typeof spec === 'string' && spec.startsWith('npm:')) {
+    return {};
+  }
+  if (majorOf(spec) === '7') {
+    // ponytail: TS 7.0 has no compiler API. Alias until typescript-eslint accepts the 7.1 API.
+    const typescriptApi = 'npm:@typescript/typescript6@^6.0.2';
+    const typescriptNative = 'npm:typescript@^7.0.2';
+
+    return { typescript: typescriptApi, '@typescript/native': typescriptNative };
+  }
+
+  return { typescript: rangeOf('typescript') };
+}
+
 function withDevDependencies(packageManifest) {
   const dependencyNames = [
     'eslint',
-    'typescript',
     'eslint-config-codely',
     'eslint-plugin-boundaries',
     'eslint-plugin-check-file',
@@ -332,12 +352,14 @@ function withDevDependencies(packageManifest) {
   const current = devDependencies['lint-ddd'];
   const keepsLocal = typeof current === 'string' && (current.startsWith('file:') || current.startsWith('link:'));
   const added = Object.fromEntries(dependencyNames.map((name) => [name, rangeOf(name)]));
+  const typescriptSpec = devDependencies.typescript;
 
   return {
     ...packageManifest,
     devDependencies: {
       ...devDependencies,
       ...added,
+      ...typescriptDependencies(typescriptSpec),
       'lint-ddd': keepsLocal ? current : `^${ourPackage.version}`,
     },
   };

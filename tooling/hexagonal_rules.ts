@@ -339,154 +339,30 @@ export const hexagonalRules = {
     },
     defaultOptions: [],
     create(context) {
-      const identifierEffects: Record<string, Effect> = {
-        Date: 'clock',
-        fetch: 'network',
-        XMLHttpRequest: 'network',
-        WebSocket: 'network',
-        setTimeout: 'timer',
-        setInterval: 'timer',
-        setImmediate: 'timer',
-        queueMicrotask: 'timer',
-        clearTimeout: 'timer',
-        clearInterval: 'timer',
-        clearImmediate: 'timer',
-        requestAnimationFrame: 'timer',
-        cancelAnimationFrame: 'timer',
-        process: 'process',
-        console: 'console',
-        Buffer: 'buffer',
-        Intl: 'intl',
-        require: 'loading',
-        Function: 'forbidden',
-        eval: 'forbidden',
-        document: 'forbidden',
-        window: 'forbidden',
-        self: 'forbidden',
-        localStorage: 'forbidden',
-        sessionStorage: 'forbidden',
-        navigator: 'forbidden',
-        location: 'forbidden',
-        history: 'forbidden',
-        screen: 'forbidden',
-        addEventListener: 'forbidden',
-        removeEventListener: 'forbidden',
-        postMessage: 'forbidden',
-        crypto: 'random',
-      };
       const layer = layerOf({ filename: context.filename });
       if (layer === null) {
         return {};
       }
       const sourceCode = context.sourceCode;
-      const report = ({ node, effect }: { node: TSESTree.Node; effect: Effect | null }): void => {
-        const effectLayers: Record<Effect, readonly Layer[]> = {
-          clock: ['secondary'],
-          random: ['secondary'],
-          network: ['secondary'],
-          timer: ['primary', 'secondary'],
-          process: ['composition'],
-          console: ['secondary', 'composition'],
-          buffer: ['primary', 'secondary'],
-          path: ['secondary', 'composition'],
-          loading: ['primary', 'secondary', 'composition', 'presentation'],
-          intl: ['primary', 'secondary', 'composition', 'presentation'],
-          forbidden: [],
-        };
-        if (effect === null) {
-          return;
-        }
-        const entry2 = effectLayers[effect];
-        if (entry2.includes(layer)) {
-          return;
-        }
-        context.report({ node, messageId: effect });
-      };
 
       return {
         Identifier(node: TSESTree.Identifier) {
-          const effectOfIdentifier = ({
-            sourceCode,
-            node,
-          }: {
-            sourceCode: TSESLint.SourceCode;
-            node: TSESTree.Identifier;
-          }): Effect | null => {
-            if (isSkippedName(node) || !isImplicitGlobal({ sourceCode, node })) {
-              return null;
-            }
-            if (node.name === 'Function' && isTypeName(node)) {
-              return null;
-            }
-
-            return node.name === '__dirname' || node.name === '__filename'
-              ? 'path'
-              : (identifierEffects[node.name] ?? null);
-          };
-          report({ node, effect: effectOfIdentifier({ sourceCode, node }) });
+          reportAmbient({ context, layer, node, effect: effectOfIdentifier({ sourceCode, node }) });
         },
         MemberExpression(node: TSESTree.MemberExpression) {
-          const effectOfMember = ({
-            sourceCode,
-            node,
-          }: {
-            sourceCode: TSESLint.SourceCode;
-            node: TSESTree.MemberExpression;
-          }): Effect | null => {
-            const effectForUse = ({ name, members }: { name: string; members: readonly string[] }): Effect | null => {
-              const specificMembers: Record<string, Record<string, Effect>> = {
-                Math: { random: 'random' },
-                performance: { now: 'clock', timeOrigin: 'clock' },
-              };
-              const ownedEffect = ({
-                record,
-                name,
-              }: {
-                record: Record<string, Effect>;
-                name: string;
-              }): Effect | null => (Object.hasOwn(record, name) ? (record[name] ?? null) : null);
-              if (name === '__dirname' || name === '__filename') {
-                return 'path';
-              }
-              if (!Object.hasOwn(specificMembers, name)) {
-                return ownedEffect({ record: identifierEffects, name });
-              }
-              if (members.length === 0) {
-                return null;
-              }
-
-              const record = specificMembers[name];
-              const member = members[0];
-              if (record === undefined || member === undefined) {
-                return null;
-              }
-
-              return ownedEffect({ record, name: member });
-            };
-            const isInnerMember = (node: TSESTree.MemberExpression): boolean => {
-              const parent6 = node.parent;
-
-              return parent6.type === 'MemberExpression' && unwrapExpression(parent6.object) === node;
-            };
-            if (isInnerMember(node)) {
-              return null;
-            }
-            const chain = memberChain(node);
-            if (chain === null) {
-              return isOpaqueGlobalThis({ sourceCode, node }) ? 'forbidden' : null;
-            }
-            const use = globalUse({ sourceCode, chain });
-
-            return use === null ? null : effectForUse(use);
-          };
-          report({ node, effect: effectOfMember({ sourceCode, node }) });
+          reportAmbient({ context, layer, node, effect: effectOfMember({ sourceCode, node }) });
         },
         ImportExpression(node: TSESTree.ImportExpression) {
-          report({ node, effect: 'loading' });
+          reportAmbient({ context, layer, node, effect: 'loading' });
         },
         ImportDeclaration(node: TSESTree.ImportDeclaration) {
           const specifiers3 = node.specifiers;
-          report({ node, effect: specifiers3.length === 0 && node.importKind !== 'type' ? 'loading' : null });
+          reportAmbient({
+            context,
+            layer,
+            node,
+            effect: specifiers3.length === 0 && node.importKind !== 'type' ? 'loading' : null,
+          });
         },
       };
     },
@@ -592,110 +468,11 @@ export const hexagonalRules = {
 
       return {
         Program(node: TSESTree.Program) {
-          const functionsFromExport = ({
-            program,
-            statement,
-          }: {
-            program: TSESTree.Program;
-            statement: TSESTree.ProgramStatement;
-          }): readonly FunctionNode[] => {
-            const asFunction = (node: TSESTree.Node | null): FunctionNode | null => {
-              if (node === null) {
-                return null;
-              }
-              const value = unwrapExpression(node);
-
-              return value.type === 'FunctionDeclaration' ||
-                value.type === 'FunctionExpression' ||
-                value.type === 'ArrowFunctionExpression'
-                ? value
-                : null;
-            };
-            if (statement.type === 'ExportDefaultDeclaration') {
-              const declaration2 = statement.declaration;
-              const fn = declaration2.type === 'FunctionDeclaration' ? declaration2 : asFunction(declaration2);
-
-              return fn === null ? [] : [fn];
-            }
-            if (statement.type !== 'ExportNamedDeclaration' || statement.source !== null) {
-              return [];
-            }
-            const declaration3 = statement.declaration;
-            if (declaration3?.type === 'FunctionDeclaration') {
-              return [declaration3];
-            }
-            const declaration4 = statement.declaration;
-            if (declaration4?.type === 'VariableDeclaration') {
-              const declarations3 = declaration4.declarations;
-
-              return declarations3.flatMap((declarator) => {
-                const fn = declarator.init === null ? null : asFunction(declarator.init);
-
-                return fn === null ? [] : [fn];
-              });
-            }
-
-            const specifiers2 = statement.specifiers;
-
-            return specifiers2.flatMap((specifier) => {
-              const functionsNamed = ({
-                program,
-                name,
-              }: {
-                program: TSESTree.Program;
-                name: string;
-              }): readonly FunctionNode[] => {
-                const body2 = program.body;
-
-                return body2.flatMap((statement) => {
-                  const declaration = statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement;
-                  if (declaration !== null && declaration.type === 'FunctionDeclaration') {
-                    const id2 = declaration.id;
-                    if (id2?.name === name) {
-                      return [declaration];
-                    }
-                  }
-                  if (declaration?.type !== 'VariableDeclaration') {
-                    return [];
-                  }
-
-                  const declarations2 = declaration.declarations;
-
-                  return declarations2.flatMap((declarator) => {
-                    const id3 = declarator.id;
-                    const fn =
-                      id3.type === 'Identifier' && id3.name === name && declarator.init !== null
-                        ? asFunction(declarator.init)
-                        : null;
-
-                    return fn === null ? [] : [fn];
-                  });
-                });
-              };
-              const local2 = specifier.local;
-
-              return functionsNamed({ program, name: local2.name });
-            });
-          };
           const body3 = node.body;
           const exported = [
             ...new Set(body3.flatMap((statement) => functionsFromExport({ program: node, statement }))),
           ];
           exported.forEach((fn) => {
-            const takesObject = (fn: FunctionNode): boolean => {
-              const params2 = fn.params;
-              if (params2.length !== 1) {
-                return false;
-              }
-              const params3 = fn.params;
-              const parameter = params3[0];
-              if (parameter === undefined) {
-                return false;
-              }
-              const pattern = parameter.type === 'AssignmentPattern' ? parameter.left : parameter;
-
-              return pattern.type === 'ObjectPattern';
-            };
             if (exported.length > 1) {
               context.report({ node: fn, messageId: 'one' });
             }
@@ -762,33 +539,6 @@ export const hexagonalRules = {
           context.report({ node, messageId: 'enum' });
         },
         'ClassDeclaration, ClassExpression'(node: TSESTree.ClassDeclaration | TSESTree.ClassExpression) {
-          const extendsError = (node: TSESTree.ClassDeclaration | TSESTree.ClassExpression): boolean => {
-            const rightmostName = (node: TSESTree.Node): string | null => {
-              const value = unwrapExpression(node);
-              if (value.type === 'Identifier') {
-                return value.name;
-              }
-              if (value.type !== 'MemberExpression') {
-                return null;
-              }
-              const property5 = value.property;
-              if (!value.computed && property5.type === 'Identifier') {
-                const property11 = value.property;
-
-                return property11.name;
-              }
-
-              const property12 = value.property;
-
-              return property12.type === 'Literal' && typeof property12.value === 'string' ? property12.value : null;
-            };
-            if (node.superClass === null) {
-              return false;
-            }
-            const name = rightmostName(node.superClass);
-
-            return name === 'Error' || (name !== null && name.endsWith('Error'));
-          };
           if (layer === 'ports') {
             context.report({ node, messageId: 'portClass' });
           } else if (!extendsError(node)) {
@@ -796,43 +546,6 @@ export const hexagonalRules = {
           }
         },
         'NewExpression, CallExpression'(node: TSESTree.NewExpression | TSESTree.CallExpression) {
-          const builtinName = ({
-            sourceCode,
-            node,
-          }: {
-            sourceCode: TSESLint.SourceCode;
-            node: TSESTree.Node;
-          }): string | null => {
-            const builtinErrors = new Set([
-              'Error',
-              'TypeError',
-              'RangeError',
-              'SyntaxError',
-              'ReferenceError',
-              'EvalError',
-              'URIError',
-              'AggregateError',
-            ]);
-            const value = unwrapExpression(node);
-            if (value.type === 'Identifier') {
-              return builtinErrors.has(value.name) && isImplicitGlobal({ sourceCode, node: value }) ? value.name : null;
-            }
-            if (value.type !== 'MemberExpression') {
-              return null;
-            }
-            const chain = memberChain(value);
-            if (chain === null) {
-              return null;
-            }
-            const use = globalUse({ sourceCode, chain });
-
-            if (use === null) {
-              return null;
-            }
-            const members5 = use.members;
-
-            return members5.length === 0 && builtinErrors.has(use.name) ? use.name : null;
-          };
           const sourceCode = context.sourceCode;
           if (builtinName({ sourceCode, node: node.callee }) !== null) {
             context.report({ node, messageId: 'builtin' });
@@ -897,3 +610,300 @@ export const hexagonalRules = {
     },
   }),
 };
+
+const identifierEffects: Record<string, Effect> = {
+  Date: 'clock',
+  fetch: 'network',
+  XMLHttpRequest: 'network',
+  WebSocket: 'network',
+  setTimeout: 'timer',
+  setInterval: 'timer',
+  setImmediate: 'timer',
+  queueMicrotask: 'timer',
+  clearTimeout: 'timer',
+  clearInterval: 'timer',
+  clearImmediate: 'timer',
+  requestAnimationFrame: 'timer',
+  cancelAnimationFrame: 'timer',
+  process: 'process',
+  console: 'console',
+  Buffer: 'buffer',
+  Intl: 'intl',
+  require: 'loading',
+  Function: 'forbidden',
+  eval: 'forbidden',
+  document: 'forbidden',
+  window: 'forbidden',
+  self: 'forbidden',
+  localStorage: 'forbidden',
+  sessionStorage: 'forbidden',
+  navigator: 'forbidden',
+  location: 'forbidden',
+  history: 'forbidden',
+  screen: 'forbidden',
+  addEventListener: 'forbidden',
+  removeEventListener: 'forbidden',
+  postMessage: 'forbidden',
+  crypto: 'random',
+};
+
+type AmbientContext = TSESLint.RuleContext<Effect, []>;
+
+function reportAmbient({
+  context,
+  layer,
+  node,
+  effect,
+}: {
+  context: AmbientContext;
+  layer: Layer;
+  node: TSESTree.Node;
+  effect: Effect | null;
+}): void {
+  const effectLayers: Record<Effect, readonly Layer[]> = {
+    clock: ['secondary'],
+    random: ['secondary'],
+    network: ['secondary'],
+    timer: ['primary', 'secondary'],
+    process: ['composition'],
+    console: ['secondary', 'composition'],
+    buffer: ['primary', 'secondary'],
+    path: ['secondary', 'composition'],
+    loading: ['primary', 'secondary', 'composition', 'presentation'],
+    intl: ['primary', 'secondary', 'composition', 'presentation'],
+    forbidden: [],
+  };
+  if (effect === null) {
+    return;
+  }
+  const entry2 = effectLayers[effect];
+  if (entry2.includes(layer)) {
+    return;
+  }
+  context.report({ node, messageId: effect });
+}
+
+function effectOfIdentifier({
+  sourceCode,
+  node,
+}: {
+  sourceCode: TSESLint.SourceCode;
+  node: TSESTree.Identifier;
+}): Effect | null {
+  if (isSkippedName(node) || !isImplicitGlobal({ sourceCode, node })) {
+    return null;
+  }
+  if (node.name === 'Function' && isTypeName(node)) {
+    return null;
+  }
+
+  return node.name === '__dirname' || node.name === '__filename' ? 'path' : (identifierEffects[node.name] ?? null);
+}
+
+function ownedEffect({ record, name }: { record: Record<string, Effect>; name: string }): Effect | null {
+  return Object.hasOwn(record, name) ? (record[name] ?? null) : null;
+}
+
+function effectForUse({ name, members }: { name: string; members: readonly string[] }): Effect | null {
+  const specificMembers: Record<string, Record<string, Effect>> = {
+    Math: { random: 'random' },
+    performance: { now: 'clock', timeOrigin: 'clock' },
+  };
+  if (name === '__dirname' || name === '__filename') {
+    return 'path';
+  }
+  if (!Object.hasOwn(specificMembers, name)) {
+    return ownedEffect({ record: identifierEffects, name });
+  }
+  if (members.length === 0) {
+    return null;
+  }
+  const record = specificMembers[name];
+  const member = members[0];
+  if (record === undefined || member === undefined) {
+    return null;
+  }
+
+  return ownedEffect({ record, name: member });
+}
+
+function isInnerMember(node: TSESTree.MemberExpression): boolean {
+  const parent6 = node.parent;
+
+  return parent6.type === 'MemberExpression' && unwrapExpression(parent6.object) === node;
+}
+
+function effectOfMember({
+  sourceCode,
+  node,
+}: {
+  sourceCode: TSESLint.SourceCode;
+  node: TSESTree.MemberExpression;
+}): Effect | null {
+  if (isInnerMember(node)) {
+    return null;
+  }
+  const chain = memberChain(node);
+  if (chain === null) {
+    return isOpaqueGlobalThis({ sourceCode, node }) ? 'forbidden' : null;
+  }
+  const use = globalUse({ sourceCode, chain });
+
+  return use === null ? null : effectForUse(use);
+}
+
+function asFunction(node: TSESTree.Node | null): FunctionNode | null {
+  if (node === null) {
+    return null;
+  }
+  const value = unwrapExpression(node);
+
+  return value.type === 'FunctionDeclaration' ||
+    value.type === 'FunctionExpression' ||
+    value.type === 'ArrowFunctionExpression'
+    ? value
+    : null;
+}
+
+function functionsFromVariable(declaration: TSESTree.VariableDeclaration): readonly FunctionNode[] {
+  const declarations3 = declaration.declarations;
+
+  return declarations3.flatMap((declarator) => {
+    const fn = declarator.init === null ? null : asFunction(declarator.init);
+
+    return fn === null ? [] : [fn];
+  });
+}
+
+function functionsNamed({ program, name }: { program: TSESTree.Program; name: string }): readonly FunctionNode[] {
+  const body2 = program.body;
+
+  return body2.flatMap((statement) => {
+    const declaration = statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement;
+    if (declaration !== null && declaration.type === 'FunctionDeclaration') {
+      const id2 = declaration.id;
+      if (id2?.name === name) {
+        return [declaration];
+      }
+    }
+    if (declaration?.type !== 'VariableDeclaration') {
+      return [];
+    }
+    const declarations2 = declaration.declarations;
+
+    return declarations2.flatMap((declarator) => {
+      const id3 = declarator.id;
+      const fn =
+        id3.type === 'Identifier' && id3.name === name && declarator.init !== null ? asFunction(declarator.init) : null;
+
+      return fn === null ? [] : [fn];
+    });
+  });
+}
+
+function functionsFromExport({
+  program,
+  statement,
+}: {
+  program: TSESTree.Program;
+  statement: TSESTree.ProgramStatement;
+}): readonly FunctionNode[] {
+  if (statement.type === 'ExportDefaultDeclaration') {
+    const declaration2 = statement.declaration;
+    const fn = declaration2.type === 'FunctionDeclaration' ? declaration2 : asFunction(declaration2);
+
+    return fn === null ? [] : [fn];
+  }
+  if (statement.type !== 'ExportNamedDeclaration' || statement.source !== null) {
+    return [];
+  }
+  const declaration3 = statement.declaration;
+  if (declaration3?.type === 'FunctionDeclaration') {
+    return [declaration3];
+  }
+  const declaration4 = statement.declaration;
+  if (declaration4?.type === 'VariableDeclaration') {
+    return functionsFromVariable(declaration4);
+  }
+  const specifiers2 = statement.specifiers;
+
+  return specifiers2.flatMap((specifier) => {
+    const local2 = specifier.local;
+
+    return functionsNamed({ program, name: local2.name });
+  });
+}
+
+function takesObject(fn: FunctionNode): boolean {
+  const params2 = fn.params;
+  if (params2.length !== 1) {
+    return false;
+  }
+  const params3 = fn.params;
+  const parameter = params3[0];
+  if (parameter === undefined) {
+    return false;
+  }
+  const pattern = parameter.type === 'AssignmentPattern' ? parameter.left : parameter;
+
+  return pattern.type === 'ObjectPattern';
+}
+
+function rightmostName(node: TSESTree.Node): string | null {
+  const value = unwrapExpression(node);
+  if (value.type === 'Identifier') {
+    return value.name;
+  }
+  if (value.type !== 'MemberExpression') {
+    return null;
+  }
+  const property5 = value.property;
+  if (!value.computed && property5.type === 'Identifier') {
+    const property11 = value.property;
+
+    return property11.name;
+  }
+  const property12 = value.property;
+
+  return property12.type === 'Literal' && typeof property12.value === 'string' ? property12.value : null;
+}
+
+function extendsError(node: TSESTree.ClassDeclaration | TSESTree.ClassExpression): boolean {
+  if (node.superClass === null) {
+    return false;
+  }
+  const name = rightmostName(node.superClass);
+
+  return name === 'Error' || (name !== null && name.endsWith('Error'));
+}
+
+function builtinName({ sourceCode, node }: { sourceCode: TSESLint.SourceCode; node: TSESTree.Node }): string | null {
+  const builtinErrors = new Set([
+    'Error',
+    'TypeError',
+    'RangeError',
+    'SyntaxError',
+    'ReferenceError',
+    'EvalError',
+    'URIError',
+    'AggregateError',
+  ]);
+  const value = unwrapExpression(node);
+  if (value.type === 'Identifier') {
+    return builtinErrors.has(value.name) && isImplicitGlobal({ sourceCode, node: value }) ? value.name : null;
+  }
+  if (value.type !== 'MemberExpression') {
+    return null;
+  }
+  const chain = memberChain(value);
+  if (chain === null) {
+    return null;
+  }
+  const use = globalUse({ sourceCode, chain });
+  if (use === null) {
+    return null;
+  }
+  const members5 = use.members;
+
+  return members5.length === 0 && builtinErrors.has(use.name) ? use.name : null;
+}

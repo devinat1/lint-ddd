@@ -367,6 +367,145 @@ export const treeFromSelection = ({
 /**
  *
  */
+export const sameCursor = ({ left, right }: { left: TreeCursor; right: TreeCursor }): boolean =>
+  left.group === right.group && left.rule === right.rule;
+
+/**
+ *
+ */
+export const visibleRows = (state: TreeState): readonly TreeCursor[] => {
+  const rulesOn2 = state.rulesOn;
+
+  return rulesOn2.flatMap((rules, group) => [
+    { group, rule: null },
+    ...(state.expanded === group ? Array.from({ length: rules.length }, (_, rule) => ({ group, rule })) : []),
+  ]);
+};
+
+/**
+ *
+ */
+export const movedCursor = ({ name, state }: { name: string; state: TreeState }): TreeCursor | undefined => {
+  if (name !== 'up' && name !== 'down') {
+    return undefined;
+  }
+  const rows = visibleRows(state);
+  if (rows.length === 0) {
+    return undefined;
+  }
+  const index = rows.findIndex((row) => sameCursor({ left: row, right: state.cursor }));
+  const current = index === -1 ? 0 : index;
+  const delta = name === 'up' ? rows.length - 1 : 1;
+
+  return rows[(current + delta) % rows.length];
+};
+
+/**
+ *
+ */
+export const nextExpanded = ({ name, state }: { name: string; state: TreeState }): number | null | undefined => {
+  if (name !== 'left' && name !== 'right') {
+    return undefined;
+  }
+  const { group, rule } = state.cursor;
+  const rulesOn3 = state.rulesOn;
+  const entry = rulesOn3[group];
+  const childCount = entry?.length ?? 0;
+  if (name === 'left') {
+    return state.expanded === group ? null : state.expanded;
+  }
+  if (rule !== null || childCount === 0 || state.expanded === group) {
+    return state.expanded;
+  }
+
+  return group;
+};
+
+/**
+ *
+ */
+export const keptCursor = ({ name, state }: { name: string; state: TreeState }): TreeCursor => {
+  const cursor3 = state.cursor;
+  if (name === 'left' && cursor3.rule !== null) {
+    const cursor4 = state.cursor;
+
+    return { group: cursor4.group, rule: null };
+  }
+
+  return state.cursor;
+};
+
+/**
+ *
+ */
+export const withGroupRules = ({
+  state,
+  group,
+  rules,
+}: {
+  state: TreeState;
+  group: number;
+  rules: readonly boolean[];
+}): TreeState => {
+  const rulesOn4 = state.rulesOn;
+
+  return {
+    ...state,
+    rulesOn: rulesOn4.map((row, index) => (index === group ? rules : row)),
+  };
+};
+
+/**
+ *
+ */
+export const toggledRule = ({ state, group, rule }: { state: TreeState; group: number; rule: number }): TreeState => {
+  const rulesOn5 = state.rulesOn;
+
+  return withGroupRules({
+    state,
+    group,
+    rules: (rulesOn5[group] ?? []).map((isOn, index) => (index === rule ? !isOn : isOn)),
+  });
+};
+
+/**
+ *
+ */
+export const toggledGroup = (state: TreeState): TreeState => {
+  const { group } = state.cursor;
+  const rulesOn6 = state.rulesOn;
+  const rules = rulesOn6[group] ?? [];
+  if (rules.length === 0) {
+    const emptyOn2 = state.emptyOn;
+    const emptyOn3 = state.emptyOn;
+    const emptyOn = emptyOn2.includes(group) ? emptyOn3.filter((index) => index !== group) : [...state.emptyOn, group];
+
+    return { ...state, emptyOn };
+  }
+
+  return withGroupRules({
+    state,
+    group,
+    rules: rules.map(() => !rules.every((isOn) => isOn)),
+  });
+};
+
+/**
+ *
+ */
+export const toggled = (state: TreeState): TreeState => {
+  const { rule } = state.cursor;
+  if (rule === null) {
+    return toggledGroup(state);
+  }
+  const cursor2 = state.cursor;
+
+  return toggledRule({ state, group: cursor2.group, rule });
+};
+
+/**
+ *
+ */
 export const checklistStep = ({
   name,
   state,
@@ -374,118 +513,10 @@ export const checklistStep = ({
   name: string;
   state: TreeState;
 }): { state: TreeState; isDone: boolean; shouldDraw: boolean } => {
-  const movedCursor = ({ name, state }: { name: string; state: TreeState }): TreeCursor | undefined => {
-    const sameCursor = ({ left, right }: { left: TreeCursor; right: TreeCursor }): boolean =>
-      left.group === right.group && left.rule === right.rule;
-    const visibleRows = (state: TreeState): readonly TreeCursor[] => {
-      const rulesOn2 = state.rulesOn;
-
-      return rulesOn2.flatMap((rules, group) => [
-        { group, rule: null },
-        ...(state.expanded === group ? Array.from({ length: rules.length }, (_, rule) => ({ group, rule })) : []),
-      ]);
-    };
-    if (name !== 'up' && name !== 'down') {
-      return undefined;
-    }
-    const rows = visibleRows(state);
-    if (rows.length === 0) {
-      return undefined;
-    }
-    const index = rows.findIndex((row) => sameCursor({ left: row, right: state.cursor }));
-    const current = index === -1 ? 0 : index;
-    const delta = name === 'up' ? rows.length - 1 : 1;
-
-    return rows[(current + delta) % rows.length];
-  };
-  const nextExpanded = ({ name, state }: { name: string; state: TreeState }): number | null | undefined => {
-    if (name !== 'left' && name !== 'right') {
-      return undefined;
-    }
-    const { group, rule } = state.cursor;
-    const rulesOn3 = state.rulesOn;
-    const entry = rulesOn3[group];
-    const childCount = entry?.length ?? 0;
-    if (name === 'left') {
-      return state.expanded === group ? null : state.expanded;
-    }
-    if (rule !== null || childCount === 0 || state.expanded === group) {
-      return state.expanded;
-    }
-
-    return group;
-  };
-  const keptCursor = ({ name, state }: { name: string; state: TreeState }): TreeCursor => {
-    const cursor3 = state.cursor;
-    if (name === 'left' && cursor3.rule !== null) {
-      const cursor4 = state.cursor;
-
-      return { group: cursor4.group, rule: null };
-    }
-
-    return state.cursor;
-  };
   if (name === 'return') {
     return { state, isDone: true, shouldDraw: false };
   }
   if (name === 'space') {
-    const toggled = (state: TreeState): TreeState => {
-      const withGroupRules = ({
-        state,
-        group,
-        rules,
-      }: {
-        state: TreeState;
-        group: number;
-        rules: readonly boolean[];
-      }): TreeState => {
-        const rulesOn4 = state.rulesOn;
-
-        return {
-          ...state,
-          rulesOn: rulesOn4.map((row, index) => (index === group ? rules : row)),
-        };
-      };
-      const toggledRule = ({ state, group, rule }: { state: TreeState; group: number; rule: number }): TreeState => {
-        const rulesOn5 = state.rulesOn;
-
-        return withGroupRules({
-          state,
-          group,
-          rules: (rulesOn5[group] ?? []).map((isOn, index) => (index === rule ? !isOn : isOn)),
-        });
-      };
-      const { rule } = state.cursor;
-      if (rule === null) {
-        const toggledGroup = (state: TreeState): TreeState => {
-          const { group } = state.cursor;
-          const rulesOn6 = state.rulesOn;
-          const rules = rulesOn6[group] ?? [];
-          if (rules.length === 0) {
-            const emptyOn2 = state.emptyOn;
-            const emptyOn3 = state.emptyOn;
-            const emptyOn = emptyOn2.includes(group)
-              ? emptyOn3.filter((index) => index !== group)
-              : [...state.emptyOn, group];
-
-            return { ...state, emptyOn };
-          }
-
-          return withGroupRules({
-            state,
-            group,
-            rules: rules.map(() => !rules.every((isOn) => isOn)),
-          });
-        };
-
-        return toggledGroup(state);
-      }
-
-      const cursor2 = state.cursor;
-
-      return toggledRule({ state, group: cursor2.group, rule });
-    };
-
     return { state: toggled(state), isDone: false, shouldDraw: true };
   }
   const cursor = movedCursor({ name, state });

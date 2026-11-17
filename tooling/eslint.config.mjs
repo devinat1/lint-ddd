@@ -35,85 +35,91 @@ const ruleIsUsed = (selection, ruleId) => {
   return isRuleActive({ selection, ruleId }) || off3.includes(ruleId);
 };
 
-const baseBlocks = ({ selection, rootPath }) => {
-  const entry = strictLintConfiguration[0];
-  const strictRules = entry.rules;
-  const typeAwarePolicies = new Set([
-    'policy/boolean-prefix',
-    'policy/named-parameters',
-    'policy/array-emptiness',
-    'policy/immutable-arrays',
-    'policy/parameter-mutation',
-    'policy/optional-nullable',
-    'policy/validated-input',
-    'policy/used-react-props',
-    'policy/checked-return',
-    'policy/no-enum-boolean',
-  ]);
-  const usesTypeChecker = (selection) =>
-    ruleIds.some(
-      (ruleId) =>
-        isRuleActive({ selection, ruleId }) &&
-        (ruleId.startsWith('@typescript-eslint/') || typeAwarePolicies.has(ruleId)),
-    );
-  const typeCheckerLanguage = ({ rootPath, providesParser }) => ({
-    parserOptions: {
-      projectService: false,
-      project: ['./tsconfig.eslint.json'],
-      tsconfigRootDir: rootPath,
-    },
-    ...(providesParser ? {} : { parser: typescriptEslint.parser }),
-  });
-  const hostPlugins = (selection) => {
-    const plugins = {};
-    const groups2 = selection.groups;
-    if (!groups2.includes('codely')) {
-      if (ruleIsUsed(selection, 'import/no-cycle') || ruleIsUsed(selection, 'import/no-default-export')) {
-        plugins.import = importPlugin;
-      }
-      if (ruleIsUsed(selection, 'prettier/prettier')) {
-        plugins.prettier = prettierPlugin;
-      }
-      if (
-        ruleIsUsed(selection, 'check-file/filename-naming-convention') ||
-        ruleIsUsed(selection, 'check-file/folder-naming-convention')
-      ) {
-        plugins['check-file'] = checkFilePlugin;
-      }
-    }
-    if (ruleIsUsed(selection, 'jsdoc/require-jsdoc') || ruleIsUsed(selection, 'jsdoc/no-types')) {
-      plugins.jsdoc = jsdocPlugin;
-    }
+/**
+ *
+ */
+export const typeAwarePolicies = new Set([
+  'policy/boolean-prefix',
+  'policy/named-parameters',
+  'policy/array-emptiness',
+  'policy/immutable-arrays',
+  'policy/parameter-mutation',
+  'policy/optional-nullable',
+  'policy/validated-input',
+  'policy/used-react-props',
+  'policy/checked-return',
+  'policy/no-enum-boolean',
+]);
 
-    return Object.keys(plugins).length === 0 ? undefined : plugins;
-  };
-  const typescriptBlock = (selection) => {
-    const groups3 = selection.groups;
-    if (groups3.includes('codely')) {
-      return undefined;
-    }
+/**
+ *
+ */
+export const usesTypeChecker = (selection) =>
+  ruleIds.some(
+    (ruleId) =>
+      isRuleActive({ selection, ruleId }) &&
+      (ruleId.startsWith('@typescript-eslint/') || typeAwarePolicies.has(ruleId)),
+  );
 
-    return {
-      files: ['**/*.{ts,tsx,mts,cts}'],
-      plugins: { '@typescript-eslint': typescriptEslint.plugin },
-      languageOptions: { parser: typescriptEslint.parser },
-    };
+/**
+ *
+ */
+export const typeCheckerLanguage = ({ rootPath, providesParser }) => ({
+  parserOptions: {
+    projectService: false,
+    project: ['./tsconfig.eslint.json'],
+    tsconfigRootDir: rootPath,
+  },
+  ...(providesParser ? {} : { parser: typescriptEslint.parser }),
+});
+
+/**
+ *
+ */
+export const hostPlugins = (selection) => {
+  const plugins = {};
+  const groups2 = selection.groups;
+  if (!groups2.includes('codely')) {
+    if (ruleIsUsed(selection, 'import/no-cycle') || ruleIsUsed(selection, 'import/no-default-export')) {
+      plugins.import = importPlugin;
+    }
+    if (ruleIsUsed(selection, 'prettier/prettier')) {
+      plugins.prettier = prettierPlugin;
+    }
+    if (
+      ruleIsUsed(selection, 'check-file/filename-naming-convention') ||
+      ruleIsUsed(selection, 'check-file/folder-naming-convention')
+    ) {
+      plugins['check-file'] = checkFilePlugin;
+    }
+  }
+  if (ruleIsUsed(selection, 'jsdoc/require-jsdoc') || ruleIsUsed(selection, 'jsdoc/no-types')) {
+    plugins.jsdoc = jsdocPlugin;
+  }
+
+  return Object.keys(plugins).length === 0 ? undefined : plugins;
+};
+
+/**
+ *
+ */
+export const typescriptBlock = (selection) => {
+  const groups3 = selection.groups;
+  if (groups3.includes('codely')) {
+    return undefined;
+  }
+
+  return {
+    files: ['**/*.{ts,tsx,mts,cts}'],
+    plugins: { '@typescript-eslint': typescriptEslint.plugin },
+    languageOptions: { parser: typescriptEslint.parser },
   };
-  const blocks = [];
-  const groups5 = selection.groups;
-  if (groups5.includes('codely')) {
-    const full2 = eslintConfigCodely.full;
-    blocks.push(...full2.filter((configuration) => configuration.ignores === undefined));
-  }
-  blocks.push({ ignores: ['node_modules/**', '.codegraph/**', 'dist/**'] });
-  const plugins = hostPlugins(selection);
-  if (plugins !== undefined) {
-    blocks.push({ plugins });
-  }
-  const typescript = typescriptBlock(selection);
-  if (typescript !== undefined) {
-    blocks.push(typescript);
-  }
+};
+
+/**
+ *
+ */
+export const pushCodeStyle = ({ blocks, selection, rootPath }) => {
   const codeStyleRules = { ...(configuredRules(selection, Object.entries(codeRules)) ?? {}) };
   const groups6 = selection.groups;
   const groups7 = selection.groups;
@@ -135,6 +141,12 @@ const baseBlocks = ({ selection, rootPath }) => {
       },
     });
   }
+};
+
+/**
+ *
+ */
+export const pushStrictTypes = ({ blocks, selection, rootPath, strictRules }) => {
   const hasActiveStrictRule = Object.keys(strictRules).some((ruleId) => isRuleActive({ selection, ruleId }));
   const selectedStrictRules = configuredRules(selection, Object.entries(strictRules));
   if (selectedStrictRules !== undefined) {
@@ -159,57 +171,102 @@ const baseBlocks = ({ selection, rootPath }) => {
       languageOptions: typeCheckerLanguage({ rootPath, providesParser: groups9.includes('codely') }),
     });
   }
+};
+
+const baseBlocks = ({ selection, rootPath }) => {
+  const entry = strictLintConfiguration[0];
+  const strictRules = entry.rules;
+  const blocks = [];
+  const groups5 = selection.groups;
+  if (groups5.includes('codely')) {
+    const full2 = eslintConfigCodely.full;
+    blocks.push(...full2.filter((configuration) => configuration.ignores === undefined));
+  }
+  blocks.push({ ignores: ['node_modules/**', '.codegraph/**', 'dist/**'] });
+  const plugins = hostPlugins(selection);
+  if (plugins !== undefined) {
+    blocks.push({ plugins });
+  }
+  const typescript = typescriptBlock(selection);
+  if (typescript !== undefined) {
+    blocks.push(typescript);
+  }
+  pushCodeStyle({ blocks, selection, rootPath });
+  pushStrictTypes({ blocks, selection, rootPath, strictRules });
 
   return blocks;
 };
 
-const policyBlocks = (selection) => {
-  const magicNumbers = [
-    'error',
-    {
-      ignore: [-1, 0, 1],
-      ignoreArrayIndexes: true,
-      ignoreEnums: true,
-      ignoreNumericLiteralTypes: true,
-      ignoreTypeIndexes: true,
-      ignoreReadonlyClassProperties: true,
-      enforceConst: true,
-      detectObjects: true,
-    },
-  ];
-  const jsxSyntax = (selection) => {
-    const codeSyntax = codeRules['no-restricted-syntax'];
-    const norestrictedsyntax = frontendRules['no-restricted-syntax'];
-    const jsxSyntaxSelectors = norestrictedsyntax.slice(codeSyntax.length);
-    const jsxOnlySyntax = ['error', ...jsxSyntaxSelectors];
-    const groups4 = selection.groups;
-    const off4 = selection.off;
-    if (!groups4.includes('presentation') || off4.includes('no-restricted-syntax')) {
-      return undefined;
-    }
-    if (isRuleActive({ selection, ruleId: 'no-restricted-syntax' })) {
-      return frontendRules['no-restricted-syntax'];
-    }
+/**
+ *
+ */
+export const magicNumbers = [
+  'error',
+  {
+    ignore: [-1, 0, 1],
+    ignoreArrayIndexes: true,
+    ignoreEnums: true,
+    ignoreNumericLiteralTypes: true,
+    ignoreTypeIndexes: true,
+    ignoreReadonlyClassProperties: true,
+    enforceConst: true,
+    detectObjects: true,
+  },
+];
 
-    return jsxOnlySyntax;
-  };
-  const usesPolicy = ruleIds.some(
-    (ruleId) =>
-      ruleIsUsed(selection, ruleId) &&
-      (ruleId.startsWith('policy/') ||
-        ruleId === 'no-param-reassign' ||
-        ruleId === '@typescript-eslint/no-magic-numbers'),
-  );
-  if (!usesPolicy) {
-    return [];
+/**
+ *
+ */
+export const jsxSyntax = (selection) => {
+  const codeSyntax = codeRules['no-restricted-syntax'];
+  const norestrictedsyntax = frontendRules['no-restricted-syntax'];
+  const jsxSyntaxSelectors = norestrictedsyntax.slice(codeSyntax.length);
+  const jsxOnlySyntax = ['error', ...jsxSyntaxSelectors];
+  const groups4 = selection.groups;
+  const off4 = selection.off;
+  if (!groups4.includes('presentation') || off4.includes('no-restricted-syntax')) {
+    return undefined;
   }
-  const commentRules = configuredRules(selection, [['policy/comment-and-log', 'error']]);
-  const blocks = [
-    {
-      plugins: { policy: policyPlugin },
-      ...(commentRules === undefined ? {} : { rules: commentRules }),
-    },
-  ];
+  if (isRuleActive({ selection, ruleId: 'no-restricted-syntax' })) {
+    return frontendRules['no-restricted-syntax'];
+  }
+
+  return jsxOnlySyntax;
+};
+
+/**
+ *
+ */
+export const layerPolicySpecs = [
+  {
+    files: ['src/{domain,ports,application,adapters,composition,presentation}/**/*.{ts,tsx}'],
+    specs: [['policy/ambient-effects', 'error']],
+  },
+  { files: ['src/domain/**/*.ts'], specs: [['policy/sync-domain', 'error']] },
+  { files: ['src/ports/**/*.ts'], specs: [['policy/port-contracts', 'error']] },
+  { files: ['src/application/**/*.ts'], specs: [['policy/use-case', 'error']] },
+  { files: ['src/{domain,ports,application}/**/*.ts'], specs: [['policy/direct-exports', 'error']] },
+  { files: ['src/{domain,ports,application}/**/*.ts'], specs: [['policy/core-errors', 'error']] },
+  { files: ['src/{domain,ports}/**/*.ts'], specs: [['policy/readonly-model', 'error']] },
+];
+
+/**
+ *
+ */
+export const pushLayerPolicies = ({ blocks, selection }) => {
+  layerPolicySpecs.forEach(({ files, specs }) => {
+    const rules = configuredRules(selection, specs);
+    if (rules !== undefined) {
+      const productTests = ['**/*.{test,spec}.{ts,tsx}'];
+      blocks.push({ files, ignores: productTests, rules });
+    }
+  });
+};
+
+/**
+ *
+ */
+export const pushSourcePolicies = ({ blocks, selection }) => {
   const conventionRules = configuredRules(selection, [
     ['policy/boolean-prefix', 'error'],
     ['policy/named-parameters', 'error'],
@@ -238,6 +295,27 @@ const policyBlocks = (selection) => {
   if (testRules !== undefined) {
     blocks.push({ files: ['{src,tests}/**/*.{ts,tsx,js,jsx,mjs,cjs}'], rules: testRules });
   }
+};
+
+const policyBlocks = (selection) => {
+  const usesPolicy = ruleIds.some(
+    (ruleId) =>
+      ruleIsUsed(selection, ruleId) &&
+      (ruleId.startsWith('policy/') ||
+        ruleId === 'no-param-reassign' ||
+        ruleId === '@typescript-eslint/no-magic-numbers'),
+  );
+  if (!usesPolicy) {
+    return [];
+  }
+  const commentRules = configuredRules(selection, [['policy/comment-and-log', 'error']]);
+  const blocks = [
+    {
+      plugins: { policy: policyPlugin },
+      ...(commentRules === undefined ? {} : { rules: commentRules }),
+    },
+  ];
+  pushSourcePolicies({ blocks, selection });
   const jsxRules = { ...(configuredRules(selection, [['policy/static-tailwind', 'error']]) ?? {}) };
   const syntax = jsxSyntax(selection);
   if (syntax !== undefined) {
@@ -250,90 +328,97 @@ const policyBlocks = (selection) => {
   if (reactPropRules !== undefined) {
     blocks.push({ files: ['src/presentation/**/*.tsx'], rules: reactPropRules });
   }
-  [
-    {
-      files: ['src/{domain,ports,application,adapters,composition,presentation}/**/*.{ts,tsx}'],
-      specs: [['policy/ambient-effects', 'error']],
-    },
-    { files: ['src/domain/**/*.ts'], specs: [['policy/sync-domain', 'error']] },
-    { files: ['src/ports/**/*.ts'], specs: [['policy/port-contracts', 'error']] },
-    { files: ['src/application/**/*.ts'], specs: [['policy/use-case', 'error']] },
-    { files: ['src/{domain,ports,application}/**/*.ts'], specs: [['policy/direct-exports', 'error']] },
-    { files: ['src/{domain,ports,application}/**/*.ts'], specs: [['policy/core-errors', 'error']] },
-    { files: ['src/{domain,ports}/**/*.ts'], specs: [['policy/readonly-model', 'error']] },
-  ].forEach(({ files, specs }) => {
-    const rules = configuredRules(selection, specs);
-    if (rules !== undefined) {
-      const productTests = ['**/*.{test,spec}.{ts,tsx}'];
-      blocks.push({ files, ignores: productTests, rules });
-    }
-  });
+  pushLayerPolicies({ blocks, selection });
 
   return blocks;
 };
 
+/**
+ *
+ */
+export const boundaryElements = [
+  { type: 'domain', pattern: 'src/domain', partialMatch: false },
+  { type: 'ports', pattern: 'src/ports', partialMatch: false },
+  { type: 'application', pattern: 'src/application', partialMatch: false },
+  { type: 'primary', pattern: 'src/adapters/primary/*', partialMatch: false },
+  { type: 'secondary', pattern: 'src/adapters/secondary/*', partialMatch: false },
+  { type: 'composition', pattern: 'src/composition', partialMatch: false },
+  { type: 'presentation', pattern: 'src/presentation', partialMatch: false },
+  { type: 'test', pattern: 'tests', partialMatch: false },
+  { type: 'tooling', pattern: 'tooling', partialMatch: false },
+];
+
+/**
+ *
+ */
+export const boundaryDependencies = {
+  domain: ['domain'],
+  ports: ['domain', 'ports'],
+  application: ['domain', 'ports', 'application'],
+  primary: ['application', 'ports', 'domain', 'composition'],
+  secondary: ['ports', 'domain'],
+  composition: ['application', 'ports', 'domain', 'primary', 'secondary', 'composition'],
+  presentation: ['presentation', 'composition', 'domain'],
+  test: ['*'],
+  tooling: ['*'],
+};
+
+/**
+ *
+ */
+export const externalDependencies = {
+  domain: ['zod'],
+  ports: ['zod'],
+  application: ['zod'],
+  primary: ['zod', 'node:http'],
+  secondary: ['zod', 'node:crypto'],
+  composition: ['zod'],
+  presentation: ['react', 'react-dom', 'react/jsx-runtime', 'next', 'next/link', 'next/navigation'],
+};
+
+/**
+ *
+ */
+export const boundaryFiles = [
+  { category: 'test', pattern: '**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs}', exclusive: true },
+  { category: 'test', pattern: 'tests/**', exclusive: true },
+  { category: 'tooling', pattern: 'tooling/**', exclusive: true },
+  { category: 'tooling', pattern: 'bin/lint_ddd.mjs', exclusive: true },
+  { category: 'tooling', pattern: '*.config.mjs', exclusive: true },
+];
+
+/**
+ *
+ */
+export const selectRole = (role) => [{ element: { type: role } }, { file: { categories: [role] } }];
+
+/**
+ *
+ */
+export const boundaryPolicies = () => [
+  {
+    dependency: { relationship: { to: 'internal' } },
+    allow: { to: { module: { origin: 'local' } } },
+  },
+  ...Object.entries(boundaryDependencies).map(([role, allowed]) => ({
+    from: { element: { type: role } },
+    allow: { to: { element: { type: allowed } } },
+  })),
+  ...Object.entries(externalDependencies).map(([role, allowed]) => ({
+    from: { element: { type: role } },
+    allow: { to: { module: { origin: ['external', 'core'], source: allowed } } },
+  })),
+  {
+    from: { module: { origin: 'local' } },
+    disallow: { to: { file: { categories: ['test', 'tooling'] } } },
+  },
+  ...['test', 'tooling'].map((role) => ({
+    from: selectRole(role),
+    allow: { to: { module: { origin: ['local', 'external', 'core'] } } },
+  })),
+];
+
 const boundaryBlocks = ({ selection, rootPath }) => {
-  const elements = [
-    { type: 'domain', pattern: 'src/domain', partialMatch: false },
-    { type: 'ports', pattern: 'src/ports', partialMatch: false },
-    { type: 'application', pattern: 'src/application', partialMatch: false },
-    { type: 'primary', pattern: 'src/adapters/primary/*', partialMatch: false },
-    { type: 'secondary', pattern: 'src/adapters/secondary/*', partialMatch: false },
-    { type: 'composition', pattern: 'src/composition', partialMatch: false },
-    { type: 'presentation', pattern: 'src/presentation', partialMatch: false },
-    { type: 'test', pattern: 'tests', partialMatch: false },
-    { type: 'tooling', pattern: 'tooling', partialMatch: false },
-  ];
-  const dependencies = {
-    domain: ['domain'],
-    ports: ['domain', 'ports'],
-    application: ['domain', 'ports', 'application'],
-    primary: ['application', 'ports', 'domain', 'composition'],
-    secondary: ['ports', 'domain'],
-    composition: ['application', 'ports', 'domain', 'primary', 'secondary', 'composition'],
-    presentation: ['presentation', 'composition', 'domain'],
-    test: ['*'],
-    tooling: ['*'],
-  };
-  const externalDependencies = {
-    domain: ['zod'],
-    ports: ['zod'],
-    application: ['zod'],
-    primary: ['zod', 'node:http'],
-    secondary: ['zod', 'node:crypto'],
-    composition: ['zod'],
-    presentation: ['react', 'react-dom', 'react/jsx-runtime', 'next', 'next/link', 'next/navigation'],
-  };
-  const selectRole = (role) => [{ element: { type: role } }, { file: { categories: [role] } }];
-  const files = [
-    { category: 'test', pattern: '**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs}', exclusive: true },
-    { category: 'test', pattern: 'tests/**', exclusive: true },
-    { category: 'tooling', pattern: 'tooling/**', exclusive: true },
-    { category: 'tooling', pattern: 'bin/lint_ddd.mjs', exclusive: true },
-    { category: 'tooling', pattern: '*.config.mjs', exclusive: true },
-  ];
-  const boundaryPolicies = () => [
-    {
-      dependency: { relationship: { to: 'internal' } },
-      allow: { to: { module: { origin: 'local' } } },
-    },
-    ...Object.entries(dependencies).map(([role, allowed]) => ({
-      from: { element: { type: role } },
-      allow: { to: { element: { type: allowed } } },
-    })),
-    ...Object.entries(externalDependencies).map(([role, allowed]) => ({
-      from: { element: { type: role } },
-      allow: { to: { module: { origin: ['external', 'core'], source: allowed } } },
-    })),
-    {
-      from: { module: { origin: 'local' } },
-      disallow: { to: { file: { categories: ['test', 'tooling'] } } },
-    },
-    ...['test', 'tooling'].map((role) => ({
-      from: selectRole(role),
-      allow: { to: { module: { origin: ['local', 'external', 'core'] } } },
-    })),
-  ];
   const rules = configuredRules(selection, [
     ['boundaries/no-unknown-files', 'error'],
     ['boundaries/no-unknown-dependencies', 'error'],
@@ -363,8 +448,8 @@ const boundaryBlocks = ({ selection, rootPath }) => {
       settings: {
         'boundaries/root-path': rootPath,
         'boundaries/ignore': ['dist/**', '/dist/**', '.codegraph/**', '/.codegraph/**'],
-        'boundaries/elements': elements,
-        'boundaries/files': files,
+        'boundaries/elements': boundaryElements,
+        'boundaries/files': boundaryFiles,
         'boundaries/dependency-nodes': ['import', 'export', 'require', 'dynamic-import'],
         'boundaries/additional-dependency-nodes': [
           { selector: 'TSImportType > Literal', kind: 'type', name: 'type-import' },

@@ -1,4 +1,4 @@
-import type { TSESTree } from '@typescript-eslint/utils';
+import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
 import { ESLintUtils } from '@typescript-eslint/utils';
 
 import { readPath } from './read_field.ts';
@@ -146,135 +146,7 @@ export const presentationRules = {
             return;
           }
           readClasses(node.value).forEach((classes) => {
-            const effectsFor = (utility: string): string[] => {
-              const spacing = /^(p|m)([trblxyse]?)-/.exec(utility);
-              if (spacing) {
-                const directions: Partial<Record<string, string[]>> = {
-                  '': ['t', 'r', 'b', 'l', 's', 'e'],
-                  x: ['r', 'l', 's', 'e'],
-                  y: ['t', 'b'],
-                  t: ['t'],
-                  r: ['r'],
-                  b: ['b'],
-                  l: ['l'],
-                  s: ['s', 'r', 'l'],
-                  e: ['e', 'r', 'l'],
-                };
-
-                return (directions[spacing.at(2) ?? ''] ?? []).map(
-                  (direction) => `${spacing.at(1) ?? ''}-${direction}`,
-                );
-              }
-              if (/^gap-/.test(utility)) {
-                return utility.startsWith('gap-x-')
-                  ? ['gap-x']
-                  : utility.startsWith('gap-y-')
-                    ? ['gap-y']
-                    : ['gap-x', 'gap-y'];
-              }
-              if (
-                [
-                  'block',
-                  'inline',
-                  'inline-block',
-                  'flex',
-                  'inline-flex',
-                  'grid',
-                  'inline-grid',
-                  'hidden',
-                  'contents',
-                  'flow-root',
-                  'table',
-                  'inline-table',
-                  'table-row',
-                  'table-cell',
-                  'table-caption',
-                  'table-row-group',
-                  'table-column',
-                  'table-column-group',
-                  'table-header-group',
-                  'table-footer-group',
-                  'list-item',
-                ].includes(utility)
-              ) {
-                return ['display'];
-              }
-              if (utility.startsWith('size-')) {
-                return ['w', 'h'];
-              }
-              if (utility === 'container') {
-                return ['w', 'max-w'];
-              }
-              if (/^flex-(row|col)(-reverse)?$/.test(utility)) {
-                return ['flex-direction'];
-              }
-              if (/^flex-/.test(utility)) {
-                return ['flex-grow', 'flex-shrink', 'flex-basis'];
-              }
-              // Unknown utilities may overlap supported effects; they disable redundancy proofs.
-              const prefix = /^(w|min-w|max-w|h|min-h|max-h|grid-cols|items|justify)-/.exec(utility)?.[1];
-
-              return prefix !== undefined ? [prefix] : [];
-            };
-            const tokens = classes.trim().split(/\s+/);
-            tokens.forEach((token) => {
-              const utility = token.split(':').at(-1)?.replace(/^!|!$/g, '') ?? '';
-              if (/^-?m[trblxyse]?-/.test(utility)) {
-                context.report({ node, messageId: 'margin' });
-              }
-              const value = /^-?(?:gap(?:-[xy])?|[mp][trblxyse]?)-(\d+(?:\.\d+)?)$/.exec(utility)?.[1];
-              if (value !== undefined && Number(value) % 2 !== 0) {
-                context.report({ node, messageId: 'spacing' });
-              }
-            });
-            const responsive = tokens
-              .map((token) => {
-                const breakpoints = ['', 'sm', 'md', 'lg', 'xl', '2xl'];
-                const parts = token.split(':');
-                const breakpoint = parts.length === 1 ? '' : parts.length === 2 ? (parts[0] ?? '') : 'unsupported';
-
-                return { token, utility: parts.at(-1) ?? '', rank: breakpoints.indexOf(breakpoint) };
-              })
-              .filter((entry) => entry.rank >= 0)
-              .sort((left, right) => left.rank - right.rank);
-            if (
-              responsive.length !== tokens.length ||
-              tokens.some((token) => token.includes('[') || token.includes('!')) ||
-              responsive.some((entry) => effectsFor(entry.utility).length === 0)
-            ) {
-              return;
-            }
-            responsive.forEach((entry, index) => {
-              const utility2 = entry.utility;
-              const utility3 = entry.utility;
-              if (entry.rank === 0 || utility2.includes('[') || utility3.includes('!')) {
-                return;
-              }
-              const effects = effectsFor(entry.utility);
-              if (effects.length === 0) {
-                return;
-              }
-              const previous = responsive
-                .slice(0, index)
-                .filter(
-                  (candidate) =>
-                    candidate.rank < entry.rank &&
-                    effectsFor(candidate.utility).some((effect) => effects.includes(effect)),
-                );
-              const latest = previous.at(-1);
-              if (
-                latest?.utility === entry.utility &&
-                !previous.some((candidate) => candidate.rank === latest.rank && candidate.utility !== latest.utility) &&
-                !responsive.some(
-                  (candidate) =>
-                    candidate.rank === entry.rank &&
-                    candidate !== entry &&
-                    effectsFor(candidate.utility).some((effect) => effects.includes(effect)),
-                )
-              ) {
-                context.report({ node, messageId: 'redundant' });
-              }
-            });
+            reportClassIssues({ context, node, classes });
           });
         },
       };
@@ -294,102 +166,338 @@ export const presentationRules = {
         'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression'(
           node: TSESTree.FunctionDeclaration | TSESTree.FunctionExpression | TSESTree.ArrowFunctionExpression,
         ) {
-          const services = ESLintUtils.getParserServices(context);
-          const program2 = services.program;
-          const checker = program2.getTypeChecker();
-          const readComponentName = (
-            node: TSESTree.FunctionDeclaration | TSESTree.FunctionExpression | TSESTree.ArrowFunctionExpression,
-          ) => {
-            if (node.type === 'FunctionDeclaration') {
-              const id2 = node.id;
-
-              return id2?.name ?? null;
-            }
-
-            const parent2 = node.parent;
-
-            if (parent2.type !== 'VariableDeclarator') {
-              return null;
-            }
-            const id3 = parent2.id;
-
-            return id3.type === 'Identifier' ? id3.name : null;
-          };
-          const name = readComponentName(node);
-          const params2 = node.params;
-          if (name === null || !/^[A-Z]/.test(name) || params2.length !== 1) {
-            return;
-          }
-          const params3 = node.params;
-          const parameter = params3.at(0);
-          if (!parameter) {
-            return;
-          }
-          const esTreeNodeToTSNodeMap2 = services.esTreeNodeToTSNodeMap;
-          const type = checker.getTypeAtLocation(esTreeNodeToTSNodeMap2.get(parameter));
-          const fields = type.getProperties().filter((field) => {
-            const declarations2 = field.declarations;
-
-            return (
-              declarations2?.some((declaration) =>
-                /\/src\/presentation\//.test(declaration.getSourceFile().fileName),
-              ) === true
-            );
-          });
-          if (parameter.type === 'ObjectPattern') {
-            const properties2 = parameter.properties;
-            if (properties2.some((property) => property.type === 'RestElement')) {
-              return;
-            }
-            const properties3 = parameter.properties;
-            const used = properties3.flatMap((property) => {
-              if (property.type !== 'Property') {
-                return [];
-              }
-              const key2 = property.key;
-
-              return key2.type === 'Identifier' ? [key2.name] : [];
-            });
-            fields
-              .filter((field) => !used.includes(field.name))
-              .forEach((field) => {
-                context.report({ node: parameter, messageId: 'unused', data: { name: field.name } });
-              });
-          } else if (parameter.type === 'Identifier') {
-            const sourceCode2 = context.sourceCode;
-            const variable = sourceCode2.getDeclaredVariables(node).find((binding) => binding.name === parameter.name);
-            const references2 = variable?.references;
-            const references = references2?.filter((reference) => reference.isRead()) ?? [];
-            // Escaping/spreading the whole props object makes individual reads unprovable.
-            if (
-              references.some((reference) => {
-                const identifier2 = reference.identifier;
-                const parent5 = identifier2.parent;
-
-                return parent5.type !== 'MemberExpression' || parent5.computed;
-              })
-            ) {
-              return;
-            }
-            const used = references.flatMap((reference) => {
-              const identifier4 = reference.identifier;
-              const parent7 = identifier4.parent;
-
-              if (parent7.type !== 'MemberExpression') {
-                return [];
-              }
-              const property = parent7.property;
-
-              return property.type === 'Identifier' ? [property.name] : [];
-            });
-            fields
-              .filter((field) => !used.includes(field.name))
-              .forEach((field) => {
-                context.report({ node: parameter, messageId: 'unused', data: { name: field.name } });
-              });
-          }
+          reportUnusedProps({ context, node });
         },
       };
     },
   }),
 };
+
+type ClassContext = TSESLint.RuleContext<'margin' | 'spacing' | 'redundant', []>;
+type PropContext = TSESLint.RuleContext<'unused', []>;
+type ComponentNode = TSESTree.FunctionDeclaration | TSESTree.FunctionExpression | TSESTree.ArrowFunctionExpression;
+type ParserServices = ReturnType<typeof ESLintUtils.getParserServices>;
+interface ResponsiveEntry {
+  token: string;
+  utility: string;
+  rank: number;
+}
+
+function displayUtilities(): readonly string[] {
+  return [
+    'block',
+    'inline',
+    'inline-block',
+    'flex',
+    'inline-flex',
+    'grid',
+    'inline-grid',
+    'hidden',
+    'contents',
+    'flow-root',
+    'table',
+    'inline-table',
+    'table-row',
+    'table-cell',
+    'table-caption',
+    'table-row-group',
+    'table-column',
+    'table-column-group',
+    'table-header-group',
+    'table-footer-group',
+    'list-item',
+  ];
+}
+
+function spacingEffects(spacing: RegExpExecArray): string[] {
+  const directions: Partial<Record<string, string[]>> = {
+    '': ['t', 'r', 'b', 'l', 's', 'e'],
+    x: ['r', 'l', 's', 'e'],
+    y: ['t', 'b'],
+    t: ['t'],
+    r: ['r'],
+    b: ['b'],
+    l: ['l'],
+    s: ['s', 'r', 'l'],
+    e: ['e', 'r', 'l'],
+  };
+
+  return (directions[spacing.at(2) ?? ''] ?? []).map((direction) => `${spacing.at(1) ?? ''}-${direction}`);
+}
+
+function effectsFor(utility: string): string[] {
+  const spacing = /^(p|m)([trblxyse]?)-/.exec(utility);
+  if (spacing) {
+    return spacingEffects(spacing);
+  }
+  if (/^gap-/.test(utility)) {
+    return utility.startsWith('gap-x-') ? ['gap-x'] : utility.startsWith('gap-y-') ? ['gap-y'] : ['gap-x', 'gap-y'];
+  }
+  if (displayUtilities().includes(utility)) {
+    return ['display'];
+  }
+  if (utility.startsWith('size-')) {
+    return ['w', 'h'];
+  }
+  if (utility === 'container') {
+    return ['w', 'max-w'];
+  }
+  if (/^flex-(row|col)(-reverse)?$/.test(utility)) {
+    return ['flex-direction'];
+  }
+  if (/^flex-/.test(utility)) {
+    return ['flex-grow', 'flex-shrink', 'flex-basis'];
+  }
+  // Unknown utilities may overlap supported effects; they disable redundancy proofs.
+  const prefix = /^(w|min-w|max-w|h|min-h|max-h|grid-cols|items|justify)-/.exec(utility)?.[1];
+
+  return prefix !== undefined ? [prefix] : [];
+}
+
+function reportSpacing({
+  context,
+  node,
+  tokens,
+}: {
+  context: ClassContext;
+  node: TSESTree.JSXAttribute;
+  tokens: string[];
+}) {
+  tokens.forEach((token) => {
+    const utility = token.split(':').at(-1)?.replace(/^!|!$/g, '') ?? '';
+    if (/^-?m[trblxyse]?-/.test(utility)) {
+      context.report({ node, messageId: 'margin' });
+    }
+    const value = /^-?(?:gap(?:-[xy])?|[mp][trblxyse]?)-(\d+(?:\.\d+)?)$/.exec(utility)?.[1];
+    if (value !== undefined && Number(value) % 2 !== 0) {
+      context.report({ node, messageId: 'spacing' });
+    }
+  });
+}
+
+function responsiveEntries(tokens: string[]): ResponsiveEntry[] {
+  return tokens
+    .map((token) => {
+      const breakpoints = ['', 'sm', 'md', 'lg', 'xl', '2xl'];
+      const parts = token.split(':');
+      const breakpoint = parts.length === 1 ? '' : parts.length === 2 ? (parts[0] ?? '') : 'unsupported';
+
+      return { token, utility: parts.at(-1) ?? '', rank: breakpoints.indexOf(breakpoint) };
+    })
+    .filter((entry) => entry.rank >= 0)
+    .sort((left, right) => left.rank - right.rank);
+}
+
+function sharesEffect({ utility, effects }: { utility: string; effects: string[] }) {
+  return effectsFor(utility).some((effect) => effects.includes(effect));
+}
+
+function isRedundant({
+  entry,
+  index,
+  responsive,
+}: {
+  entry: ResponsiveEntry;
+  index: number;
+  responsive: ResponsiveEntry[];
+}) {
+  const utility2 = entry.utility;
+  const utility3 = entry.utility;
+  if (entry.rank === 0 || utility2.includes('[') || utility3.includes('!')) {
+    return false;
+  }
+  const effects = effectsFor(entry.utility);
+  if (effects.length === 0) {
+    return false;
+  }
+  const previous = responsive
+    .slice(0, index)
+    .filter((candidate) => candidate.rank < entry.rank && sharesEffect({ utility: candidate.utility, effects }));
+  const latest = previous.at(-1);
+
+  return (
+    latest?.utility === entry.utility &&
+    !previous.some((candidate) => candidate.rank === latest.rank && candidate.utility !== latest.utility) &&
+    !responsive.some(
+      (candidate) =>
+        candidate.rank === entry.rank && candidate !== entry && sharesEffect({ utility: candidate.utility, effects }),
+    )
+  );
+}
+
+function reportRedundant({
+  context,
+  node,
+  tokens,
+}: {
+  context: ClassContext;
+  node: TSESTree.JSXAttribute;
+  tokens: string[];
+}) {
+  const responsive = responsiveEntries(tokens);
+  if (
+    responsive.length !== tokens.length ||
+    tokens.some((token) => token.includes('[') || token.includes('!')) ||
+    responsive.some((entry) => effectsFor(entry.utility).length === 0)
+  ) {
+    return;
+  }
+  responsive.forEach((entry, index) => {
+    if (isRedundant({ entry, index, responsive })) {
+      context.report({ node, messageId: 'redundant' });
+    }
+  });
+}
+
+function reportClassIssues({
+  context,
+  node,
+  classes,
+}: {
+  context: ClassContext;
+  node: TSESTree.JSXAttribute;
+  classes: string;
+}) {
+  const tokens = classes.trim().split(/\s+/);
+  reportSpacing({ context, node, tokens });
+  reportRedundant({ context, node, tokens });
+}
+
+function readComponentName(node: ComponentNode): string | null {
+  if (node.type === 'FunctionDeclaration') {
+    const id2 = node.id;
+
+    return id2?.name ?? null;
+  }
+  const parent2 = node.parent;
+  if (parent2.type !== 'VariableDeclarator') {
+    return null;
+  }
+  const id3 = parent2.id;
+
+  return id3.type === 'Identifier' ? id3.name : null;
+}
+
+function presentationFields({ parameter, services }: { parameter: TSESTree.Node; services: ParserServices }) {
+  const program2 = services.program;
+  if (program2 === null) {
+    return [];
+  }
+  const checker = program2.getTypeChecker();
+  const esTreeNodeToTSNodeMap2 = services.esTreeNodeToTSNodeMap;
+  const type = checker.getTypeAtLocation(esTreeNodeToTSNodeMap2.get(parameter));
+
+  return type.getProperties().filter((field) => {
+    const declarations2 = field.declarations;
+
+    return (
+      declarations2?.some((declaration) => {
+        const fileName = declaration.getSourceFile().fileName;
+
+        return /\/src\/presentation\//.test(fileName);
+      }) === true
+    );
+  });
+}
+
+function reportUnusedNames({
+  context,
+  node,
+  names,
+  fields,
+}: {
+  context: PropContext;
+  node: TSESTree.Node;
+  names: string[];
+  fields: ReturnType<typeof presentationFields>;
+}) {
+  fields
+    .filter((field) => !names.includes(field.name))
+    .forEach((field) => {
+      context.report({ node, messageId: 'unused', data: { name: field.name } });
+    });
+}
+
+function reportUnusedPattern({
+  context,
+  parameter,
+  fields,
+}: {
+  context: PropContext;
+  parameter: TSESTree.ObjectPattern;
+  fields: ReturnType<typeof presentationFields>;
+}) {
+  const properties2 = parameter.properties;
+  if (properties2.some((property) => property.type === 'RestElement')) {
+    return;
+  }
+  const properties3 = parameter.properties;
+  const used = properties3.flatMap((property) => {
+    if (property.type !== 'Property') {
+      return [];
+    }
+    const key2 = property.key;
+
+    return key2.type === 'Identifier' ? [key2.name] : [];
+  });
+  reportUnusedNames({ context, node: parameter, names: used, fields });
+}
+
+function reportUnusedBinding({
+  context,
+  node,
+  parameter,
+  fields,
+}: {
+  context: PropContext;
+  node: ComponentNode;
+  parameter: TSESTree.Identifier;
+  fields: ReturnType<typeof presentationFields>;
+}) {
+  const sourceCode2 = context.sourceCode;
+  const variable = sourceCode2.getDeclaredVariables(node).find((binding) => binding.name === parameter.name);
+  const references2 = variable?.references;
+  const references = references2?.filter((reference) => reference.isRead()) ?? [];
+  // Escaping/spreading the whole props object makes individual reads unprovable.
+  if (
+    references.some((reference) => {
+      const identifier2 = reference.identifier;
+      const parent5 = identifier2.parent;
+
+      return parent5.type !== 'MemberExpression' || parent5.computed;
+    })
+  ) {
+    return;
+  }
+  const used = references.flatMap((reference) => {
+    const identifier4 = reference.identifier;
+    const parent7 = identifier4.parent;
+    if (parent7.type !== 'MemberExpression') {
+      return [];
+    }
+    const property = parent7.property;
+
+    return property.type === 'Identifier' ? [property.name] : [];
+  });
+  reportUnusedNames({ context, node: parameter, names: used, fields });
+}
+
+function reportUnusedProps({ context, node }: { context: PropContext; node: ComponentNode }) {
+  const services = ESLintUtils.getParserServices(context);
+  const name = readComponentName(node);
+  const params2 = node.params;
+  if (name === null || !/^[A-Z]/.test(name) || params2.length !== 1) {
+    return;
+  }
+  const params3 = node.params;
+  const parameter = params3.at(0);
+  if (!parameter) {
+    return;
+  }
+  const fields = presentationFields({ parameter, services });
+  if (parameter.type === 'ObjectPattern') {
+    reportUnusedPattern({ context, parameter, fields });
+  } else if (parameter.type === 'Identifier') {
+    reportUnusedBinding({ context, node, parameter, fields });
+  }
+}

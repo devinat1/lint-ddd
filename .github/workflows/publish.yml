@@ -1,0 +1,83 @@
+name: publish
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: npm-publish-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Skip a push already included in a release
+        id: gate
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "Triggering commit is not on main."
+            exit 0
+          fi
+          ahead="$(git rev-list --count "$GITHUB_SHA..origin/main")"
+          if [ "$ahead" -eq 0 ]; then
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          pending="$(git log --format=%s "$GITHUB_SHA..origin/main" | grep -v -E '^Release [0-9]+\.[0-9]+\.[0-9]+ \[skip ci\]$' || true)"
+          if [ -z "$pending" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "This push is already part of a release commit on main."
+            exit 0
+          fi
+          echo "released=false" >> "$GITHUB_OUTPUT"
+          git reset --hard origin/main
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.released != 'true'
+        with:
+          node-version: 22.18
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - if: steps.gate.outputs.released != 'true'
+        run: npm ci
+
+      - if: steps.gate.outputs.released != 'true'
+        run: npm run check
+
+      - name: Publish the next patch
+        if: steps.gate.outputs.released != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm version patch -m "Release %s [skip ci]"
+          name="$(npm pkg get name | tr -d '"')"
+          version="$(npm pkg get version | tr -d '"')"
+          if npm view "${name}@${version}" version >/dev/null 2>&1; then
+            echo "${name}@${version} is already published."
+          else
+            if [ -z "${NODE_AUTH_TOKEN}" ]; then
+              echo "Add an npm Automation token as the NPM_TOKEN repository secret."
+              exit 1
+            fi
+            npm publish --provenance --access public
+          fi
+          git push --follow-tags origin main
